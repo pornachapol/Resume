@@ -10,7 +10,14 @@ img = Image.open("assets/profile_picture.jpeg")  # โหลดรูปโป�
 col1, col2 = st.columns([1, 4])
 
 with col1:
-    st.image("assets/profile_picture.jpeg", width=150)
+    st.markdown(
+        """
+        <div style='display: flex; justify-content: center;'>
+            <img src='https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg' width='150'/>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 with col2:
     st.title("Nachapol Roc-anusorn")
