@@ -16,8 +16,18 @@ st.markdown(
     .stApp {
         background-color: #202020;
         color: #ffffff;
+        padding-top: 80px !important; /* ← เพื่อดันเนื้อหาไม่ให้ทับเมนู */
     }
-    
+
+    /* Sticky Top Nav */
+    .fixed-top-menu {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        z-index: 999;
+    }
+
     .main-header {
         padding: 2rem 0;
         background-color: #303030;
@@ -25,7 +35,7 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         margin-bottom: 2rem;
     }
-    
+
     .content-section {
         background-color: #303030;
         padding: 1.5rem 2rem;
@@ -34,7 +44,7 @@ st.markdown(
         margin-bottom: 1.5rem;
         color: #ffffff;
     }
-    
+
     .section-title {
         color: #ffffff;
         font-size: 1.8rem;
@@ -43,21 +53,21 @@ st.markdown(
         padding-bottom: 0.6rem;
         border-bottom: 2px solid #505050;
     }
-    
+
     .job-title {
         color: #ffffff;
         font-size: 1.3rem;
         font-weight: 600;
         margin-bottom: 0.2rem;
     }
-    
+
     .job-period {
         color: #cccccc;
         font-size: 0.9rem;
         font-style: italic;
         margin-bottom: 0.8rem;
     }
-    
+
     .download-button {
         background-color: #ffffff;
         color: #202020 !important;
@@ -70,18 +80,18 @@ st.markdown(
         margin: 1rem 0;
         transition: background-color 0.3s;
     }
-    
+
     .download-button:hover {
         background-color: #e0e0e0;
     }
-    
+
     .profile-image {
         border: 3px solid #404040;
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         border-radius: 12px;
         width: 200px;
     }
-    
+
     .skill-tag {
         background-color: #404040;
         color: #ffffff;
@@ -92,7 +102,7 @@ st.markdown(
         display: inline-block;
         font-size: 0.85rem;
     }
-    
+
     .project-card {
         background-color: #404040;
         border-radius: 8px;
@@ -100,33 +110,30 @@ st.markdown(
         margin-bottom: 1rem;
         border-left: 4px solid #4cb5f9;
     }
-    
+
     .highlight {
         color: #4cb5f9;
         font-weight: 500;
     }
-    
+
     /* Fix for Streamlit's default text color */
     p, li, div {
         color: #ffffff;
     }
-    
-    /* Fix for links color */
+
     a {
         color: #4cb5f9 !important;
         text-decoration: none;
     }
-    
+
     a:hover {
         text-decoration: underline;
     }
-    
-    /* Fix for Streamlit's components */
+
     .stMarkdown, .stText {
         color: #ffffff;
     }
-    
-    /* Remove default Streamlit background color from elements */
+
     div[data-testid="stVerticalBlock"] {
         background-color: transparent;
     }
@@ -140,7 +147,7 @@ menu = st.container()
 with menu:
     st.markdown(
         """
-        <div style="background-color: #202020; padding: 0.8rem 1rem; border-bottom: 1px solid #404040; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
+        <div class="fixed-top-menu" style="background-color: #202020; padding: 0.8rem 1rem; border-bottom: 1px solid #404040; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
             <div>
                 <span style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">Nachapol Resume</span>
             </div>
@@ -155,6 +162,7 @@ with menu:
         """,
         unsafe_allow_html=True
     )
+
 
 # Header Section
 with st.container():
