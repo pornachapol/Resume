@@ -1,7 +1,6 @@
 import streamlit as st
-from PIL import Image
 
-# Page configuration
+# Page config
 st.set_page_config(
     page_title="Nachapol Roc-anusorn | Resume",
     page_icon="📄",
@@ -9,159 +8,121 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS styling
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #202020;
-        color: #ffffff;
-        padding-top: 80px !important; /* ← เพื่อดันเนื้อหาไม่ให้ทับเมนู */
-    }
+# ---------- CSS Styling ----------
+st.markdown("""
+<style>
+/* Sticky Navigation */
+.fixed-top-menu {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #202020;
+    z-index: 999;
+    min-height: 60px;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid #404040;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
 
-    /* Sticky Top Nav */
-    .fixed-top-menu {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        z-index: 999;
-    }
+/* Push content below navbar */
+.stApp {
+    padding-top: 100px !important;
+    background-color: #202020;
+    color: #ffffff;
+}
 
-    .main-header {
-        padding: 2rem 0;
-        background-color: #303030;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        margin-bottom: 2rem;
-    }
+/* Section styling */
+.main-header, .content-section {
+    background-color: #303030;
+    padding: 2rem;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    margin-bottom: 2rem;
+}
 
-    .content-section {
-        background-color: #303030;
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-        margin-bottom: 1.5rem;
-        color: #ffffff;
-    }
+.section-title {
+    color: #ffffff;
+    font-size: 1.8rem;
+    font-weight: 600;
+    margin-bottom: 1rem;
+    border-bottom: 2px solid #505050;
+    padding-bottom: 0.5rem;
+}
 
-    .section-title {
-        color: #ffffff;
-        font-size: 1.8rem;
-        font-weight: 600;
-        margin-bottom: 1.2rem;
-        padding-bottom: 0.6rem;
-        border-bottom: 2px solid #505050;
-    }
+.job-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #ffffff;
+}
 
-    .job-title {
-        color: #ffffff;
-        font-size: 1.3rem;
-        font-weight: 600;
-        margin-bottom: 0.2rem;
-    }
+.job-period {
+    font-style: italic;
+    color: #cccccc;
+    margin-bottom: 0.8rem;
+}
 
-    .job-period {
-        color: #cccccc;
-        font-size: 0.9rem;
-        font-style: italic;
-        margin-bottom: 0.8rem;
-    }
+.download-button {
+    background-color: #ffffff;
+    color: #202020 !important;
+    padding: 0.6rem 1.2rem;
+    border-radius: 6px;
+    font-weight: 500;
+    display: inline-block;
+    margin-top: 1rem;
+    text-decoration: none;
+}
 
-    .download-button {
-        background-color: #ffffff;
-        color: #202020 !important;
-        padding: 0.6rem 1.2rem;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: 500;
-        display: inline-block;
-        text-align: center;
-        margin: 1rem 0;
-        transition: background-color 0.3s;
-    }
+.download-button:hover {
+    background-color: #dddddd;
+}
 
-    .download-button:hover {
-        background-color: #e0e0e0;
-    }
+.profile-image {
+    border: 3px solid #404040;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+    border-radius: 12px;
+    width: 200px;
+}
 
-    .profile-image {
-        border: 3px solid #404040;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-        border-radius: 12px;
-        width: 200px;
-    }
+.skill-tag {
+    background-color: #404040;
+    color: #ffffff;
+    border-radius: 20px;
+    padding: 5px 12px;
+    margin: 4px 8px 8px 0;
+    display: inline-block;
+    font-size: 0.85rem;
+}
 
-    .skill-tag {
-        background-color: #404040;
-        color: #ffffff;
-        border-radius: 20px;
-        padding: 5px 12px;
-        margin-right: 8px;
-        margin-bottom: 8px;
-        display: inline-block;
-        font-size: 0.85rem;
-    }
+.project-card {
+    background-color: #404040;
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-left: 4px solid #4cb5f9;
+}
 
-    .project-card {
-        background-color: #404040;
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        border-left: 4px solid #4cb5f9;
-    }
+a {
+    color: #4cb5f9 !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
-    .highlight {
-        color: #4cb5f9;
-        font-weight: 500;
-    }
-
-    /* Fix for Streamlit's default text color */
-    p, li, div {
-        color: #ffffff;
-    }
-
-    a {
-        color: #4cb5f9 !important;
-        text-decoration: none;
-    }
-
-    a:hover {
-        text-decoration: underline;
-    }
-
-    .stMarkdown, .stText {
-        color: #ffffff;
-    }
-
-    div[data-testid="stVerticalBlock"] {
-        background-color: transparent;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Add a navigation menu
-menu = st.container()
-with menu:
-    st.markdown(
-        """
-        <div class="fixed-top-menu" style="background-color: #202020; padding: 0.8rem 1rem; border-bottom: 1px solid #404040; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">Nachapol Resume</span>
-            </div>
-            <div>
-                <a href="#summary" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Summary</a>
-                <a href="#skills" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Skills</a>
-                <a href="#experience" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Experience</a>
-                <a href="#projects" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Projects</a>
-                <a href="#education" style="color: #ffffff; text-decoration: none;">Education</a>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# ---------- Navigation Bar ----------
+st.markdown("""
+<div class="fixed-top-menu">
+    <div><span style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">Nachapol Resume</span></div>
+    <div>
+        <a href="#summary" style="margin-right: 1.5rem;">Summary</a>
+        <a href="#skills" style="margin-right: 1.5rem;">Skills</a>
+        <a href="#experience" style="margin-right: 1.5rem;">Experience</a>
+        <a href="#projects" style="margin-right: 1.5rem;">Projects</a>
+        <a href="#education">Education</a>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 
 # Header Section
