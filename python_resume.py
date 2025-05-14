@@ -3,20 +3,20 @@ from PIL import Image
 
 st.set_page_config(page_title="My Resume", page_icon="📄", layout="wide")
 
-# --- Load assets
-img = Image.open("assets/profile_picture.jpeg")  # โหลดรูปโปรไฟล์
-
-# --- Page Background Style ---
 st.markdown(
     """
     <style>
-    body {
-        background-color: #D3D3D3;
+    .stApp {
+        background-color: #D3D3D3 !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# --- Load assets
+img = Image.open("assets/profile_picture.jpeg")  # โหลดรูปโปรไฟล์
+
 
 # --- Header
 col1, col2 = st.columns([1, 3])
@@ -27,7 +27,6 @@ with col1:
         <div style='display: flex; justify-content: center;'>
             <img src='https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg' 
                  style='
-                    border-radius: 50%;
                     border: 2px solid black;
                     box-shadow: 4px 4px 10px rgba(0, 0, 0, 0.3);
                     width: 150px;
