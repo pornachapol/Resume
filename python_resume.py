@@ -326,9 +326,9 @@ with st.container():
     st.markdown('<p class="job-period">Shinning Gold | Jul 2019 – Apr 2022 | Pathum Thani</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • <span class="highlight">Increased productivity</span> in wiring team by 25% and doubled overall output
-        • Reduced lead time by 20% and improved OEE by 30% through standardization
-        • Implemented automation with Excel Macro and JavaScript for planning processes
+        • <span class="highlight">Increased productivity</span> in wiring team by 25% and doubled overall output\n
+        • Reduced lead time by 20% and improved OEE by 30% through standardization\n
+        • Implemented automation with Excel Macro and JavaScript for planning processes\n
         • Consolidated inventory to <span class="highlight">reduce duplicate stock</span> by 5% (~20kg of gold)
         """,
         unsafe_allow_html=True
@@ -341,8 +341,8 @@ with st.container():
     st.markdown('<p class="job-period">Siam Kubota Corporation | Jun 2017 – Jul 2019 | Chonburi</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • Implemented AGV and Set Box projects to improve production flow
-        • Enhanced operational efficiency and reduced manpower through process redesign
+        • Implemented AGV and Set Box projects to improve production flow\n
+        • Enhanced operational efficiency and reduced manpower through process redesign\n
         """,
         unsafe_allow_html=True
     )
