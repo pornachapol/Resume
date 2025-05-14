@@ -1,22 +1,24 @@
 import streamlit as st
 from PIL import Image
 
-st.set_page_config(page_title="My Resume", page_icon="📄", layout="wide")
+# --- Page settings
+st.set_page_config(page_title="Nachapol Resume", page_icon="📄", layout="wide")
 
+# --- Custom CSS for background and font color
 st.markdown(
     """
     <style>
     .stApp {
         background-color: #D3D3D3 !important;
+        color: #000000 !important;
+    }
+    h1, h2, h3, h4, h5, h6, p, li, a {
+        color: #000000 !important;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
-
-# --- Load assets
-img = Image.open("assets/profile_picture.jpeg")  # โหลดรูปโปรไฟล์
-
 
 # --- Header
 col1, col2 = st.columns([1, 3])
@@ -46,12 +48,12 @@ with col2:
         🔗 [LinkedIn](https://www.linkedin.com/in/r-nachapol) | 💻 [GitHub](https://github.com/pornachapol)
         """
     )
-    
+
 # --- Resume Download Section
 st.write("---")
 st.subheader("📄 Resume for Download")
 
-resume_url = "https://github.com/pornachapol/Resume/raw/main/assets/Nachapol_Resume_2025.pdf"  # ลิงก์ GitHub ที่เก็บ PDF
+resume_url = "https://github.com/pornachapol/Resume/raw/main/assets/Nachapol_Resume_2025.pdf"
 st.markdown(f"[📥 Click here to download my resume (PDF)]({resume_url})", unsafe_allow_html=True)
 
 # --- Summary
@@ -62,7 +64,6 @@ Results-driven professional with strong experience in process optimization, auto
 Skilled in delivering operational improvements through Lean methodology, RPA (UiPath), and data analytics tools such as Power BI and Excel VBA. 
 Proven ability to lead end-to-end projects across manufacturing, retail, and insurance industries, driving measurable results in productivity, SLA compliance, and stock efficiency.
 """)
-
 
 # --- Skills
 st.write("---")
@@ -127,46 +128,58 @@ st.markdown("""
 - Enhanced operational efficiency and reduced manpower through process redesign.
 """)
 
-
 # --- Projects
 st.write("---")
 st.subheader("Projects")
 
-st.markdown("**E-Certification System for Jewelry**")
+st.markdown("### E-Certification System for Jewelry")
+st.markdown("_NGG Enterprise, 2023_")
 st.markdown("""
-Led the end-to-end development of an electronic certification system for jewelry products, improving operational efficiency and document traceability.
+- Led end-to-end development of an electronic certification system for jewelry.  
+- Improved efficiency and ensured document traceability.
 """)
 
-st.markdown("**Jewelry Vending Machine Project**")
+st.markdown("### Jewelry Vending Machine Project")
+st.markdown("_NGG Enterprise, 2023_")
 st.markdown("""
-Managed feasibility, design, and implementation of an automated vending machine project to expand retail channels with lower operational cost.
+- Managed feasibility, design, and rollout of automated retail vending machines.  
+- Enabled new sales channels with lower operational cost.
 """)
 
-st.markdown("**Retail Price Optimization & Tag Process Improvement**")
+st.markdown("### Retail Price Optimization & Tag Process")
+st.markdown("_NGG Enterprise, 2023_")
 st.markdown("""
-Analyzed market price gaps and optimized the retail pricing and tag-changing process, resulting in improved competitiveness and agility.
+- Analyzed market price gaps and improved tag change workflow.  
+- Resulted in more competitive pricing and faster execution.
 """)
 
-st.markdown("**Sales & Supply Chain Dashboard Development**")
+st.markdown("### Sales & Supply Chain Dashboard")
+st.markdown("_NGG Enterprise, 2022_")
 st.markdown("""
-Built dashboards using Excel, Power BI, and SQL to visualize sales and inventory performance, streamlining decision-making for business units.
+- Built dashboards using Power BI, Excel, and SQL for key operations.  
+- Enabled real-time visibility and faster business decisions.
 """)
 
-st.markdown("**Automation for Report Generation**")
+st.markdown("### Report Automation with Macro & JavaScript")
+st.markdown("_Shinning Gold, 2021_")
 st.markdown("""
-Created automation tools using Excel Macro and JavaScript for data extraction and dashboard updates, reducing report time from days to hours.
+- Automated data extraction and dashboard updates.  
+- Reduced reporting time from 3 days to 2 hours.
 """)
 
-st.markdown("**Stock Optimization Project**")
+st.markdown("### Stock Optimization Project")
+st.markdown("_Shinning Gold, 2021_")
 st.markdown("""
-Used data-driven decision-making to reduce 5% of duplicate stock (~20 kg gold), saving over 6 million baht in material costs.
+- Identified duplicate gold parts and optimized stock.  
+- Reduced inventory by ~5% (~20kg), saving over 6M THB.
 """)
 
-st.markdown("**Wiring Productivity Improvement**")
+st.markdown("### Wiring Productivity Improvement")
+st.markdown("_Shinning Gold, 2020_")
 st.markdown("""
-Standardized processes and motivated team members, doubling productivity and reducing lead time by 20%, while increasing OEE by 30%.
+- Standardized processes and boosted team output.  
+- Improved OEE by 30%, reduced lead time by 20%, and doubled productivity.
 """)
-
 
 # --- Education
 st.write("---")
@@ -179,7 +192,6 @@ st.markdown("Focus: Data Analytics, Process Improvement, and Business Strategy")
 st.markdown("**Bachelor of Engineering in Industrial Engineering**")
 st.markdown("_Thammasat University, 2013 – 2017_")
 st.markdown("GPA: 3.15")
-
 
 # --- Contact
 st.write("---")
