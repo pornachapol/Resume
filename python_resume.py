@@ -25,7 +25,12 @@ st.markdown(f"[📥 Click here to download my resume (PDF)]({resume_url})", unsa
 # --- Summary
 st.write("---")
 st.subheader("Summary")
-st.write("Experienced Business/Data Analyst with 5+ years in process improvement and data-driven decision-making. Passionate about turning data into insights and strategies.")
+st.write("""
+Results-driven professional with strong experience in process optimization, automation, and cross-functional team leadership. 
+Skilled in delivering operational improvements through Lean methodology, RPA (UiPath), and data analytics tools such as Power BI and Excel VBA. 
+Proven ability to lead end-to-end projects across manufacturing, retail, and insurance industries, driving measurable results in productivity, SLA compliance, and stock efficiency.
+""")
+
 
 # --- Skills
 st.write("---")
@@ -55,23 +60,101 @@ with col2:
 # --- Experience
 st.write("---")
 st.subheader("Experience")
-st.markdown("**Claim Registration Manager – Generali Insurance** (2023 – Present)")
-st.markdown("- Improved SLA by 30% using automation and dashboarding.")
-st.markdown("- Led e-claim data integration, reducing backlog by 40%.")
+
+st.markdown("### Claim Registration Manager – Generali Life Assurance (Thailand)")
+st.markdown("_Dec 2024 – Present | Bangkok_")
+st.markdown("""
+- Reduced claim registration backlog from 20,000+ to 6,000 transactions within 2 months.  
+- Improved SLA compliance from 75% to 95% through workflow optimization.  
+- Led UAT and business analysis for E-Claim integration system.  
+- Streamlined internal processes using Lean, enhancing team efficiency.
+""")
+
+st.markdown("### Transformation & Project Management Manager – NGG Enterprise")
+st.markdown("_Apr 2022 – Dec 2024 | Bangkok_")
+st.markdown("""
+- Managed cross-functional projects such as E-Cert System, Vending Machine, and Price Optimization.  
+- Built dashboards for Sales and Supply Chain using Excel, Power BI, and SQL.  
+- Automated reporting workflows using VBA and UiPath, reducing manual effort.  
+- Designed commission scheme and clarified financial state using EBITDA analysis.
+""")
+
+st.markdown("### Supervisor & Process Improvement – Shinning Gold")
+st.markdown("_Jul 2019 – Apr 2022 | Pathum Thani_")
+st.markdown("""
+- Increased productivity in wiring team by 25% and doubled overall output.  
+- Reduced lead time by 20% and improved OEE by 30% through standardization.  
+- Implemented automation with Excel Macro and JavaScript for planning processes.  
+- Consolidated inventory to reduce duplicate stock by 5% (~20kg of gold).
+""")
+
+st.markdown("### Improvement Engineer – Siam Kubota Corporation")
+st.markdown("_Jun 2017 – Jul 2019 | Chonburi_")
+st.markdown("""
+- Implemented AGV and Set Box projects to improve production flow.  
+- Enhanced operational efficiency and reduced manpower through process redesign.
+""")
+
 
 # --- Projects
 st.write("---")
 st.subheader("Projects")
-st.markdown("- [AirSniff IoT Fire Monitoring](https://github.com/...)")
-st.markdown("- [Jewelry Vending Machine ROI Analysis](https://github.com/...)")
+
+st.markdown("**E-Certification System for Jewelry**")
+st.markdown("""
+Led the end-to-end development of an electronic certification system for jewelry products, improving operational efficiency and document traceability.
+""")
+
+st.markdown("**Jewelry Vending Machine Project**")
+st.markdown("""
+Managed feasibility, design, and implementation of an automated vending machine project to expand retail channels with lower operational cost.
+""")
+
+st.markdown("**Retail Price Optimization & Tag Process Improvement**")
+st.markdown("""
+Analyzed market price gaps and optimized the retail pricing and tag-changing process, resulting in improved competitiveness and agility.
+""")
+
+st.markdown("**Sales & Supply Chain Dashboard Development**")
+st.markdown("""
+Built dashboards using Excel, Power BI, and SQL to visualize sales and inventory performance, streamlining decision-making for business units.
+""")
+
+st.markdown("**Automation for Report Generation**")
+st.markdown("""
+Created automation tools using Excel Macro and JavaScript for data extraction and dashboard updates, reducing report time from days to hours.
+""")
+
+st.markdown("**Stock Optimization Project**")
+st.markdown("""
+Used data-driven decision-making to reduce 5% of duplicate stock (~20 kg gold), saving over 6 million baht in material costs.
+""")
+
+st.markdown("**Wiring Productivity Improvement**")
+st.markdown("""
+Standardized processes and motivated team members, doubling productivity and reducing lead time by 20%, while increasing OEE by 30%.
+""")
+
 
 # --- Education
 st.write("---")
 st.subheader("Education")
-st.markdown("**M.S. Applied Statistics (MADT)** – NIDA (2025)")
+
+st.markdown("**Master of Science in Management Analytics and Data Technologies (MADT)**")
+st.markdown("_National Institute of Development Administration (NIDA), 2024 – 2025 (Expected)_")
+st.markdown("Focus: Data Analytics, Process Improvement, and Business Strategy")
+
+st.markdown("**Bachelor of Engineering in Industrial Engineering**")
+st.markdown("_Thammasat University, 2013 – 2017_")
+st.markdown("GPA: 3.15")
+
 
 # --- Contact
 st.write("---")
 st.subheader("Contact")
-st.markdown("- 📧 email@example.com")
-st.markdown("- 🔗 [GitHub](https://github.com/...)")
+
+st.markdown("- 📍 Thonburi, Bangkok")
+st.markdown("- 📧 r.nachapol@gmail.com")
+st.markdown("- 📞 064-687-7333")
+st.markdown("- 🔗 [LinkedIn](https://www.linkedin.com/in/r-nachapol)")
+st.markdown("- 💻 [GitHub](https://github.com/pornachapol)")
