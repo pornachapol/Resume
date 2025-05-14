@@ -8,12 +8,20 @@ img = Image.open("assets/profile_picture.jpeg")  # โหลดรูปโป�
 
 # --- Header
 col1, col2 = st.columns([1, 3])
+
 with col1:
-    st.image(img, width=150)
+    st.image("assets/profile_picture.jpeg", width=150)
+
 with col2:
     st.title("Nachapol Roc-anusorn")
-    st.subheader("Business Analyst | Data Strategy | Project Manager")
-    st.markdown("📍 Bangkok, Thailand | 📧 email@example.com | 🔗 [LinkedIn](https://...)")
+    st.subheader("Business Analyst | Process Improvement | Project Leader")
+    st.markdown(
+        """
+        📍 Thonburi, Bangkok  
+        📧 [r.nachapol@gmail.com](mailto:r.nachapol@gmail.com) | 📞 064-687-7333  
+        🔗 [LinkedIn](https://www.linkedin.com/in/r-nachapol) | 💻 [GitHub](https://github.com/pornachapol)
+        """
+    )
 
 # --- Resume Download Section
 st.write("---")
