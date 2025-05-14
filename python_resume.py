@@ -4,7 +4,7 @@ from PIL import Image
 st.set_page_config(page_title="My Resume", page_icon="📄", layout="wide")
 
 # --- Load assets
-img = Image.open("assets/profile_picture.jpeg")
+img = st.image("assets/profile_picture.jpeg", width=150)
 
 # --- Header
 col1, col2 = st.columns([1, 3])
