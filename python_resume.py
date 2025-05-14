@@ -4,16 +4,23 @@ from PIL import Image
 st.set_page_config(page_title="My Resume", page_icon="📄", layout="wide")
 
 # --- Load assets
-img = Image.open("assets/profile_picture.jpeg") # ใช้ PIL เพื่อโหลดภาพ
+img = Image.open("assets/profile_picture.jpeg")  # โหลดรูปโปรไฟล์
 
 # --- Header
 col1, col2 = st.columns([1, 3])
 with col1:
-    st.image(img, width=150)  # แสดงภาพที่โหลดไว้
+    st.image(img, width=150)
 with col2:
     st.title("Nachapol Roc-anusorn")
     st.subheader("Business Analyst | Data Strategy | Project Manager")
     st.markdown("📍 Bangkok, Thailand | 📧 email@example.com | 🔗 [LinkedIn](https://...)")
+
+# --- Resume Download Section
+st.write("---")
+st.subheader("📄 Download Resume")
+
+resume_url = "https://github.com/pornachapol/Resume/raw/main/assets/Nachapol_Resume_2025.pdf"  # ลิงก์ GitHub ที่เก็บ PDF
+st.markdown(f"[📥 Click here to download my resume (PDF)]({resume_url})", unsafe_allow_html=True)
 
 # --- Summary
 st.write("---")
