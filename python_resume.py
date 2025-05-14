@@ -185,7 +185,7 @@ with st.container():
     
     with col2:
         st.markdown("<h1 style='font-size: 2.5rem; margin-bottom: 0.5rem; color: #ffffff;'>Nachapol Roc-anusorn</h1>", unsafe_allow_html=True)
-        st.markdown("<h2 style='font-size: 1.3rem; color: #cccccc; margin-top: 0;'>Process Improvement & Automation Specialist</h2>", unsafe_allow_html=True)
+        st.markdown("<h2 style='font-size: 1.3rem; color: #cccccc; margin-top: 0;'>Process Improvement | Project Management | Operations Team Leadership</h2>", unsafe_allow_html=True)
         
         col_contact1, col_contact2 = st.columns(2)
         
