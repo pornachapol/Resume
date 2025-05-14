@@ -46,7 +46,7 @@ with col2:
         🔗 [LinkedIn](https://www.linkedin.com/in/r-nachapol) | 💻 [GitHub](https://github.com/pornachapol)
         """
     )
-
+    
 # --- Resume Download Section
 st.write("---")
 st.subheader("📄 Resume for Download")
