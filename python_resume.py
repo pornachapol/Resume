@@ -17,7 +17,7 @@ with col2:
 
 # --- Resume Download Section
 st.write("---")
-st.subheader("📄 Download Resume")
+st.subheader("📄 Resume for Download")
 
 resume_url = "https://github.com/pornachapol/Resume/raw/main/assets/Nachapol_Resume_2025.pdf"  # ลิงก์ GitHub ที่เก็บ PDF
 st.markdown(f"[📥 Click here to download my resume (PDF)]({resume_url})", unsafe_allow_html=True)
@@ -30,13 +30,27 @@ st.write("Experienced Business/Data Analyst with 5+ years in process improvement
 # --- Skills
 st.write("---")
 st.subheader("Skills")
+
 col1, col2 = st.columns(2)
+
 with col1:
-    st.markdown("- Python / SQL / Power BI")
-    st.markdown("- Excel VBA / RPA UiPath")
+    st.markdown("**Hard Skills**")
+    st.markdown("- Process Optimization")
+    st.markdown("- Automation (UiPath / VBA)")
+    st.markdown("- Power BI / SQL / Python (Basic)")
+    st.markdown("- Data Visualization")
+    st.markdown("- Project & Business Analysis")
+    st.markdown("- Supply Chain Management")
+    st.markdown("- Jira, Power Automate")
+
 with col2:
-    st.markdown("- Leadership & Collaboration")
-    st.markdown("- Data Strategy & Governance")
+    st.markdown("**Soft Skills**")
+    st.markdown("- Team Leadership")
+    st.markdown("- Problem-Solving")
+    st.markdown("- Communication & Collaboration")
+    st.markdown("- Decision-Making")
+    st.markdown("- Adaptability")
+    st.markdown("- Time & Change Management")
 
 # --- Experience
 st.write("---")
