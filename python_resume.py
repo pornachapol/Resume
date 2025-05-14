@@ -296,10 +296,10 @@ with st.container():
     st.markdown('<p class="job-period">Generali Life Assurance (Thailand) | Dec 2024 – Present | Bangkok</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • <span class="highlight">Reduced claim registration backlog</span> from 20,000+ to 6,000 transactions within 2 months
-        • <span class="highlight">Improved SLA compliance</span> from 75% to 95% through workflow optimization
-        • Led UAT and business analysis for E-Claim integration system
-        • Streamlined internal processes using Lean methodology, enhancing team efficiency
+        • <span class="highlight">Reduced claim registration backlog</span> from 20,000+ to 6,000 transactions within 2 months\\n
+        • <span class="highlight">Improved SLA compliance</span> from 75% to 95% through workflow optimization\\n
+        • Led UAT and business analysis for E-Claim integration system\\n
+        • Streamlined internal processes using Lean methodology, enhancing team efficiency\\n
         """,
         unsafe_allow_html=True
     )
@@ -311,9 +311,9 @@ with st.container():
     st.markdown('<p class="job-period">NGG Enterprise | Apr 2022 – Dec 2024 | Bangkok</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • Managed cross-functional projects including E-Cert System, Vending Machine, and Price Optimization
-        • Built <span class="highlight">data-driven dashboards</span> for Sales and Supply Chain using Excel, Power BI, and SQL
-        • <span class="highlight">Automated reporting workflows</span> using VBA and UiPath, significantly reducing manual effort
+        • Managed cross-functional projects including E-Cert System, Vending Machine, and Price Optimization\\n
+        • Built <span class="highlight">data-driven dashboards</span> for Sales and Supply Chain using Excel, Power BI, and SQL\\n
+        • <span class="highlight">Automated reporting workflows</span> using VBA and UiPath, significantly reducing manual effort\\n
         • Designed commission scheme and performed EBITDA analysis to clarify financial state
         """,
         unsafe_allow_html=True
