@@ -110,20 +110,34 @@ a {
 </style>
 """, unsafe_allow_html=True)
 
-# ---------- Navigation Bar ----------
-st.markdown("""
-<div class="fixed-top-menu">
-    <div><span style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">Nachapol Resume</span></div>
-    <div>
-        <a href="#summary" style="margin-right: 1.5rem;">Summary</a>
-        <a href="#skills" style="margin-right: 1.5rem;">Skills</a>
-        <a href="#experience" style="margin-right: 1.5rem;">Experience</a>
-        <a href="#projects" style="margin-right: 1.5rem;">Projects</a>
-        <a href="#education">Education</a>
+# --- Navigation Bar (Fix visibility with full HTML render) ---
+st.components.v1.html("""
+<div style="
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background-color: #202020;
+    z-index: 999;
+    min-height: 60px;
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid #404040;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+">
+    <div style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">
+        Nachapol Resume
+    </div>
+    <div style="color: #ffffff;">
+        <a href="#summary" style="margin-right: 1.5rem; color: #ffffff; text-decoration: none;">Summary</a>
+        <a href="#skills" style="margin-right: 1.5rem; color: #ffffff; text-decoration: none;">Skills</a>
+        <a href="#experience" style="margin-right: 1.5rem; color: #ffffff; text-decoration: none;">Experience</a>
+        <a href="#projects" style="margin-right: 1.5rem; color: #ffffff; text-decoration: none;">Projects</a>
+        <a href="#education" style="color: #ffffff; text-decoration: none;">Education</a>
     </div>
 </div>
-""", unsafe_allow_html=True)
-
+""", height=80)
 
 # Header Section
 with st.container():
