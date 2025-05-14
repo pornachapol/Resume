@@ -5,7 +5,8 @@ from PIL import Image
 st.set_page_config(
     page_title="Nachapol Roc-anusorn | Resume",
     page_icon="📄",
-    layout="wide"
+    layout="wide",
+    initial_sidebar_state="collapsed"
 )
 
 # Custom CSS styling
@@ -13,51 +14,53 @@ st.markdown(
     """
     <style>
     .stApp {
-        background-color: #f8f9fa;
+        background-color: #202020;
+        color: #ffffff;
     }
     
     .main-header {
         padding: 2rem 0;
-        background-color: #ffffff;
+        background-color: #303030;
         border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         margin-bottom: 2rem;
     }
     
     .content-section {
-        background-color: #ffffff;
+        background-color: #303030;
         padding: 1.5rem 2rem;
         border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
         margin-bottom: 1.5rem;
+        color: #ffffff;
     }
     
     .section-title {
-        color: #2c3e50;
+        color: #ffffff;
         font-size: 1.8rem;
         font-weight: 600;
         margin-bottom: 1.2rem;
         padding-bottom: 0.6rem;
-        border-bottom: 2px solid #e0e0e0;
+        border-bottom: 2px solid #505050;
     }
     
     .job-title {
-        color: #2c3e50;
+        color: #ffffff;
         font-size: 1.3rem;
         font-weight: 600;
         margin-bottom: 0.2rem;
     }
     
     .job-period {
-        color: #7f8c8d;
+        color: #cccccc;
         font-size: 0.9rem;
         font-style: italic;
         margin-bottom: 0.8rem;
     }
     
     .download-button {
-        background-color: #2c3e50;
-        color: white !important;
+        background-color: #ffffff;
+        color: #202020 !important;
         padding: 0.6rem 1.2rem;
         text-decoration: none;
         border-radius: 6px;
@@ -69,18 +72,19 @@ st.markdown(
     }
     
     .download-button:hover {
-        background-color: #1a252f;
+        background-color: #e0e0e0;
     }
     
     .profile-image {
-        border: 3px solid white;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        border: 3px solid #404040;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         border-radius: 12px;
         width: 200px;
     }
     
     .skill-tag {
-        background-color: #f3f4f6;
+        background-color: #404040;
+        color: #ffffff;
         border-radius: 20px;
         padding: 5px 12px;
         margin-right: 8px;
@@ -90,21 +94,67 @@ st.markdown(
     }
     
     .project-card {
-        background-color: #f8f9fa;
+        background-color: #404040;
         border-radius: 8px;
         padding: 1rem;
         margin-bottom: 1rem;
-        border-left: 4px solid #2c3e50;
+        border-left: 4px solid #4cb5f9;
     }
     
     .highlight {
-        color: #2980b9;
+        color: #4cb5f9;
         font-weight: 500;
+    }
+    
+    /* Fix for Streamlit's default text color */
+    p, li, div {
+        color: #ffffff;
+    }
+    
+    /* Fix for links color */
+    a {
+        color: #4cb5f9 !important;
+        text-decoration: none;
+    }
+    
+    a:hover {
+        text-decoration: underline;
+    }
+    
+    /* Fix for Streamlit's components */
+    .stMarkdown, .stText {
+        color: #ffffff;
+    }
+    
+    /* Remove default Streamlit background color from elements */
+    div[data-testid="stVerticalBlock"] {
+        background-color: transparent;
     }
     </style>
     """,
     unsafe_allow_html=True
 )
+
+# Add a navigation menu
+menu = st.container()
+with menu:
+    st.markdown(
+        """
+        <div style="background-color: #202020; padding: 0.8rem 1rem; border-bottom: 1px solid #404040; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
+            <div>
+                <span style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">Nachapol Resume</span>
+            </div>
+            <div>
+                <a href="#summary" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Summary</a>
+                <a href="#skills" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Skills</a>
+                <a href="#experience" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Experience</a>
+                <a href="#projects" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Projects</a>
+                <a href="#education" style="color: #ffffff; text-decoration: none;">Education</a>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
 # Header Section
 with st.container():
@@ -124,8 +174,8 @@ with st.container():
         )
     
     with col2:
-        st.markdown("<h1 style='font-size: 2.5rem; margin-bottom: 0.5rem;'>Nachapol Roc-anusorn</h1>", unsafe_allow_html=True)
-        st.markdown("<h2 style='font-size: 1.3rem; color: #7f8c8d; margin-top: 0;'>Business Analyst | Process Improvement | Project Leader</h2>", unsafe_allow_html=True)
+        st.markdown("<h1 style='font-size: 2.5rem; margin-bottom: 0.5rem; color: #ffffff;'>Nachapol Roc-anusorn</h1>", unsafe_allow_html=True)
+        st.markdown("<h2 style='font-size: 1.3rem; color: #cccccc; margin-top: 0;'>Business Analyst | Process Improvement | Project Leader</h2>", unsafe_allow_html=True)
         
         col_contact1, col_contact2 = st.columns(2)
         
@@ -169,7 +219,7 @@ with st.container():
 
 # Summary Section
 with st.container():
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.markdown('<div class="content-section" id="summary">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Professional Summary</h2>', unsafe_allow_html=True)
     st.markdown(
         """
@@ -183,7 +233,7 @@ with st.container():
 
 # Skills Section
 with st.container():
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.markdown('<div class="content-section" id="skills">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Skills & Expertise</h2>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
@@ -238,7 +288,7 @@ with st.container():
 
 # Experience Section
 with st.container():
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.markdown('<div class="content-section" id="experience">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Professional Experience</h2>', unsafe_allow_html=True)
     
     # Job 1
@@ -301,7 +351,7 @@ with st.container():
 
 # Projects Section
 with st.container():
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.markdown('<div class="content-section" id="projects">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Key Projects</h2>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
@@ -358,7 +408,7 @@ with st.container():
 
 # Education Section
 with st.container():
-    st.markdown('<div class="content-section">', unsafe_allow_html=True)
+    st.markdown('<div class="content-section" id="education">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Education</h2>', unsafe_allow_html=True)
     
     col1, col2 = st.columns(2)
@@ -367,8 +417,8 @@ with st.container():
         st.markdown(
             """
             <div style="margin-bottom: 1.5rem;">
-                <h4 style="margin-bottom: 0.3rem;">Master of Science in Management Analytics and Data Technologies (MADT)</h4>
-                <p style="color: #7f8c8d; font-style: italic; margin-top: 0;">
+                <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Master of Science in Management Analytics and Data Technologies (MADT)</h4>
+                <p style="color: #cccccc; font-style: italic; margin-top: 0;">
                     National Institute of Development Administration (NIDA)<br>
                     2024 – 2025 (Expected)
                 </p>
@@ -382,8 +432,8 @@ with st.container():
         st.markdown(
             """
             <div>
-                <h4 style="margin-bottom: 0.3rem;">Bachelor of Engineering in Industrial Engineering</h4>
-                <p style="color: #7f8c8d; font-style: italic; margin-top: 0;">
+                <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Bachelor of Engineering in Industrial Engineering</h4>
+                <p style="color: #cccccc; font-style: italic; margin-top: 0;">
                     Thammasat University<br>
                     2013 – 2017
                 </p>
@@ -432,7 +482,7 @@ with st.container():
 # Footer
 st.markdown(
     """
-    <footer style="text-align: center; padding: 1rem; color: #7f8c8d; font-size: 0.8rem;">
+    <footer style="text-align: center; padding: 1rem; color: #cccccc; font-size: 0.8rem; margin-top: 2rem; border-top: 1px solid #404040;">
         &copy; 2025 Nachapol Roc-anusorn | Last Updated: May 2025
     </footer>
     """,
