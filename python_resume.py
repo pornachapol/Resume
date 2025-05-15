@@ -338,7 +338,7 @@ with st.container():
     
     # Job 2
     st.markdown('<h3 class="job-title">Business Transformation Manager</h3>', unsafe_allow_html=True)
-    st.markdown('<p class="job-period">NGG Enterprise Co., Ltd | Apr 2022 – Dec 2024 | Bangkok</p>', unsafe_allow_html=True)
+    st.markdown('<p class="job-period">NGG Enterprise Co., Ltd | Apr 2022 – Nov 2024 | Bangkok</p>', unsafe_allow_html=True)
     st.markdown(
         """
         • Lead <span class="highlight">digital transformation and business improvement projects</span> across departments\n
@@ -368,7 +368,7 @@ with st.container():
     
     # Job 4
     st.markdown('<h3 class="job-title">Improvement Engineer</h3>', unsafe_allow_html=True)
-    st.markdown('<p class="job-period">Siam Kubota Corporation | Jun 2017 – Jul 2019 | Chonburi</p>', unsafe_allow_html=True)
+    st.markdown('<p class="job-period">Siam Kubota Corporation | Jun 2017 – Jun 2019 | Chonburi</p>', unsafe_allow_html=True)
     st.markdown(
         """
         • Implement <span class="highlight">automation solutions</span> including AGV for production line optimization\n
