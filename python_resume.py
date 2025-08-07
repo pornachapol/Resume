@@ -386,7 +386,7 @@ with st.container():
     st.markdown('<div class="content-section" id="achievements">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Key Achievements</h2>', unsafe_allow_html=True)
     
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
     
     with col1:
         st.markdown(
@@ -399,23 +399,25 @@ with st.container():
             </div>
             
             <div class="project-card">
-                <h4 style="margin-top: 0;">Inventory Optimization at Shinning Gold</h4>
-                <p>Reduced inventory redundancy by <span class="highlight">5%</span> (~20kg gold ≈ ฿6M) through 
-                comprehensive stock analysis and process redesign.</p>
-            </div>
-            
-            <div class="project-card">
                 <h4 style="margin-top: 0;">Jewelry Vending Machine Project</h4>
                 <p>Successfully launched jewelry vending machine from feasibility study through 
                 deployment, creating a new low-cost retail channel.</p>
             </div>
+
             """,
             unsafe_allow_html=True
+            
         )
     
     with col2:
         st.markdown(
             """
+            <div class="project-card">
+                <h4 style="margin-top: 0;">Inventory Optimization at Shinning Gold</h4>
+                <p>Reduced inventory redundancy by <span class="highlight">5%</span> (~20kg gold ≈ ฿6M) through 
+                comprehensive stock analysis and process redesign.</p>
+            </div>
+            
             <div class="project-card">
                 <h4 style="margin-top: 0;">Manufacturing Performance at Shinning Gold</h4>
                 <p>Improved OEE by <span class="highlight">30%</span> and lead time by <span class="highlight">20%</span>; doubled daily output
@@ -429,6 +431,13 @@ with st.container():
                 ฿540,000/year through strategic automation of reporting and data processing.</p>
             </div>
             
+            """,
+            unsafe_allow_html=True
+        )
+        
+        with col3:
+        st.markdown(
+            """
             <div class="project-card">
                 <h4 style="margin-top: 0;">Kubota Process Innovation</h4>
                 <p>Implemented AGV and Set Box projects for production flow enhancement at Siam Kubota.</p>
