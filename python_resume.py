@@ -399,7 +399,7 @@ with st.container():
             </div>
             
             <div class="project-card">
-                <h4 style="margin-top: 0;">Jewelry Vending Machine Project</h4>
+                <h4 style="margin-top: 0;">Jewelry Vending Machine Project at NGG Enterprise</h4>
                 <p>Successfully launched jewelry vending machine from feasibility study through 
                 deployment, creating a new low-cost retail channel.</p>
             </div>
@@ -426,7 +426,7 @@ with st.container():
             </div>
             
             <div class="project-card">
-                <h4 style="margin-top: 0;">Automation & Cost Reduction</h4>
+                <h4 style="margin-top: 0;">Automation & Cost Reduction at Shinning Gold</h4>
                 <p>Reduced manual workload by <span class="highlight">2 FTEs</span>, saving approximately 
                 ฿540,000/year through strategic automation of reporting and data processing.</p>
             </div>
@@ -439,7 +439,7 @@ with st.container():
         st.markdown(
             """
             <div class="project-card">
-                <h4 style="margin-top: 0;">Kubota Process Innovation</h4>
+                <h4 style="margin-top: 0;">Process Innovation at Siam Kubota</h4>
                 <p>Implemented AGV and Set Box projects for production flow enhancement at Siam Kubota.</p>
                 <p><span class="award-badge">AWARD</span> Best QCC Award, Siam Kubota, 2018</p>
             </div>
