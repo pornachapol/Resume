@@ -405,6 +405,7 @@ with st.container():
                 <p>Reduced registration backlog by <span class="highlight">70%</span> and improved SLA from <span class="highlight">75% to 95%</span>.
                 Successfully led UAT and deployment of e-Claim Data Integration system.</p>
                 <p><span class="award-badge">AWARD</span> Exceptional Performance (Innovation), Generali Thailand, 2025</p>
+                <p><span class="output-badge">OUTPUT</span> Reduced registration backlog by 70% and improved SLA from 75% to 95%.</p>
             </div>
             """,
             unsafe_allow_html=True
