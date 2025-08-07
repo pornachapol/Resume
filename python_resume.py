@@ -115,6 +115,15 @@ st.markdown(
         font-size: 0.8rem;
         font-weight: 600;
     }
+    .output-badge {
+        background-color: #78d88f;
+        color: #202020;
+        border-radius: 4px;
+        padding: 3px 8px;
+        margin-right: 8px;
+        font-size: 0.8rem;
+        font-weight: 600;
+    }
     
     /* Fix for Streamlit's default text color */
     p, li, div {
@@ -411,8 +420,9 @@ with st.container():
             </div>
 
             <div class="project-card">
-                <h4 style="margin-top: 0;">Sales Dashboard for Management</h4>
-                <p>Designed and launched an end-to-end Sales Dashboard by integrating data from Excel and AWS Cloud Storage, cleansing and transforming data for accuracy, and visualizing insights using Power BI. Applied data storytelling and visualization best practices to support executive decision-making.</p>
+                <h4 style="margin-top: 0;">End-to-End Sales Dashboard Implementation at NGG Enterprise</h4>
+                <p>Designed and implemented a real-time Sales Dashboard for executives using Power BI, AWS Cloud Storage, and Excel. Managed full-cycle data pipeline from cleansing to visualization using storytelling methodology and effective visual design principles.</p>
+                 <p><span class="output-badge">OUTPUT</span> Reduced daily reporting by 1 hour and enabled real-time sales visibility.</p>
             </div>
 
 
