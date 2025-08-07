@@ -417,12 +417,13 @@ with st.container():
                 <h4 style="margin-top: 0;">Jewelry Vending Machine Project at NGG Enterprise</h4>
                 <p>Successfully launched jewelry vending machine from feasibility study through 
                 deployment, creating a new low-cost retail channel.</p>
+                <p><span class="output-badge">OUTPUT</span> Delivered full feasibility report, business model, and ready-to-launch kiosk design for executive consideration.</p>
             </div>
 
             <div class="project-card">
                 <h4 style="margin-top: 0;">End-to-End Sales Dashboard Implementation at NGG Enterprise</h4>
                 <p>Designed and implemented a real-time Sales Dashboard for executives using Power BI, AWS Cloud Storage, and Excel. Managed full-cycle data pipeline from cleansing to visualization using storytelling methodology and effective visual design principles.</p>
-                 <p><span class="output-badge">OUTPUT</span> Reduced daily reporting by 1 hour and enabled real-time sales visibility.</p>
+                <p><span class="output-badge">OUTPUT</span> Reduced daily reporting by 1 hour and enabled real-time sales visibility.</p>
             </div>
 
 
