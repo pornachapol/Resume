@@ -386,7 +386,7 @@ with st.container():
     st.markdown('<div class="content-section" id="achievements">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title">Key Achievements</h2>', unsafe_allow_html=True)
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     
     with col1:
         st.markdown(
@@ -397,7 +397,13 @@ with st.container():
                 Successfully led UAT and deployment of e-Claim Data Integration system.</p>
                 <p><span class="award-badge">AWARD</span> Exceptional Performance (Innovation), Generali Thailand, 2025</p>
             </div>
+            """,
+            unsafe_allow_html=True
             
+        )
+    with col2:
+        st.markdown(
+            """
             <div class="project-card">
                 <h4 style="margin-top: 0;">Jewelry Vending Machine Project at NGG Enterprise</h4>
                 <p>Successfully launched jewelry vending machine from feasibility study through 
@@ -409,7 +415,7 @@ with st.container():
             
         )
     
-    with col2:
+    with col3:
         st.markdown(
             """
             <div class="project-card">
@@ -435,7 +441,7 @@ with st.container():
             unsafe_allow_html=True
         )
         
-    with col3:
+    with col4:
         st.markdown(
             """
             <div class="project-card">
