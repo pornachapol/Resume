@@ -399,7 +399,7 @@ with st.container():
             </div>
             
             <div class="project-card">
-                <h4 style="margin-top: 0;">Inventory Optimization at NGG</h4>
+                <h4 style="margin-top: 0;">Inventory Optimization at Shinning Gold</h4>
                 <p>Reduced inventory redundancy by <span class="highlight">5%</span> (~20kg gold ≈ ฿6M) through 
                 comprehensive stock analysis and process redesign.</p>
             </div>
