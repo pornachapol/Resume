@@ -410,6 +410,12 @@ with st.container():
                 deployment, creating a new low-cost retail channel.</p>
             </div>
 
+            <div class="project-card">
+                <h4 style="margin-top: 0;">Sales Dashboard for Management</h4>
+                <p>Designed and launched an end-to-end Sales Dashboard by integrating data from Excel and AWS Cloud Storage, cleansing and transforming data for accuracy, and visualizing insights using Power BI. Applied data storytelling and visualization best practices to support executive decision-making.</p>
+            </div>
+
+
             """,
             unsafe_allow_html=True
             
