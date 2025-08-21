@@ -566,6 +566,40 @@ with st.container():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
+    # Chatbot Section
+    import requests
+    
+    st.divider()
+    st.subheader("💬 Chat with my Resume")
+    
+    # Backend URL (FastAPI ที่ Deploy บน Render)
+    BACKEND_URL = os.getenv("BACKEND_URL") or st.secrets.get("BACKEND_URL")
+    
+    if "chat" not in st.session_state:
+        st.session_state.chat = []
+    
+    # แสดงประวัติการแชท
+    for role, msg in st.session_state.chat:
+        with st.chat_message(role):
+            st.markdown(msg)
+    
+    # Input กล่องแชท
+    q = st.chat_input("ถามอะไรเกี่ยวกับเรซูเม่...")
+    if q:
+        st.session_state.chat.append(("user", q))
+        with st.chat_message("user"):
+            st.markdown(q)
+    
+        try:
+            r = requests.post(f"{BACKEND_URL}/chat", json={"message": q}, timeout=60)
+            ans = r.json().get("reply", "ขออภัย ระบบไม่ตอบกลับ")
+        except:
+            ans = "❌ เชื่อมต่อ Backend ไม่ได้"
+    
+        st.session_state.chat.append(("assistant", ans))
+        with st.chat_message("assistant"):
+            st.markdown(ans)
+
 # Footer
 st.markdown(
     """
