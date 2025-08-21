@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import google.generativeai as genai
+import pdfplumber
 
 # ===== ENV =====
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -63,39 +64,32 @@ def chunk_text(text: str, size=1200, overlap=200) -> List[str]:
     return out
 
 async def fetch_resume_text() -> str:
+    """
+    ดึงเนื้อหาเรซูเม่จาก RESUME_URL
+    - ถ้าเป็น PDF: ใช้ pdfplumber แปลง PDF -> ข้อความ
+    - ถ้าเป็น HTML: ใช้ BeautifulSoup แปลง HTML -> ข้อความ
+    """
     if not RESUME_URL:
         return ""
+    headers = {"User-Agent": "resume-bot/1.0 (+https://render.com)"}
     async with httpx.AsyncClient(timeout=60) as client:
-        r = await client.get(RESUME_URL, follow_redirects=True)
+        r = await client.get(RESUME_URL, follow_redirects=True, headers=headers)
         r.raise_for_status()
+        content_type = (r.headers.get("Content-Type") or "").lower()
+
+        # PDF (เช็กทั้ง Content-Type และนามสกุลไฟล์)
+        if "application/pdf" in content_type or RESUME_URL.lower().endswith(".pdf"):
+            with pdfplumber.open(io.BytesIO(r.content)) as pdf:
+                pages = []
+                for page in pdf.pages:
+                    txt = page.extract_text() or ""
+                    if txt:
+                        pages.append(txt)
+            return clean("\n".join(pages))
+
+        # HTML
         return html_to_text(r.text)
 
-def build_index(chunks: List[str]):
-    global VECTORIZER, MATRIX
-    VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1,2))
-    MATRIX = VECTORIZER.fit_transform(chunks)
-
-async def ensure_index(force=False):
-    global CHUNKS, LAST_FETCH_AT
-    if CHUNKS and not force and (time.time() - LAST_FETCH_AT < 3600):
-        return
-    text = await fetch_resume_text()
-    CHUNKS = chunk_text(text) if text else []
-    if CHUNKS:
-        build_index(CHUNKS)
-    LAST_FETCH_AT = time.time()
-
-def normalize_query(q: str) -> str:
-    ql = q.lower()
-    mapping = {
-        "ชื่อเต็ม": "full name",
-        "ชื่อจริง": "first name",
-        "นามสกุล": "surname",
-        "ชื่อ": "name",
-    }
-    for th, en in mapping.items():
-        ql = ql.replace(th, en)
-    return ql
 
 def retrieve(q: str, k=5):
     if not CHUNKS or VECTORIZER is None:
@@ -144,27 +138,25 @@ def build_messages(question: str, contexts: List[str]) -> list[dict]:
 
 def ask_gemini(question: str, contexts: List[str]) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
-    ctx = "\n\n".join(contexts)
+    ctx = "\n\n---\n".join(contexts) if contexts else ""
     prompt = f"""
-คุณคือระบบสรุปเอกสาร PDF  
-หน้าที่ของคุณคือ:
+คุณเป็นผู้ช่วยตอบคำถามจากเรซูเม่เท่านั้น
+ห้ามเดา ถ้าไม่พบในบริบทให้ตอบว่า "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+ตอบภาษาไทยสั้น กระชับ
 
-1. อ่านเนื้อหาใน PDF ทั้งหมด
-2. ถ้าไม่มีข้อความใน PDF → ตอบว่า: "ไม่มีเนื้อหาใน PDF"
-3. ถ้ามีเนื้อหาใน PDF →  
-   - สรุปภาพรวมว่ามีเนื้อหาเกี่ยวกับอะไร  
-   - ถ้ามีคำถามจากผู้ใช้ที่ **ไม่มีคำตอบอยู่ในเนื้อหา PDF** ให้ตอบว่า:  
-     "คำถามนี้ไม่มีคำตอบใน PDF"  
-   - ถ้ามีคำถามที่ตรงกับข้อมูลใน PDF ให้สรุปคำตอบสั้น ๆ ชัดเจน  
+[บริบทจากเรซูเม่]
+{ctx}
 
-ข้อควรจำ:
-- ห้ามแต่งหรือเดาเกินกว่าที่มีใน PDF  
-- ถ้าเนื้อหามีหลายส่วน ให้จัดเป็น bullet point หรือหัวข้อย่อยเพื่อให้อ่านง่าย  
-"
-ตอบเป็นภาษาไทยสั้น กระชับ
+[คำถาม]
+{question}
 """
-    resp = model.generate_content(prompt)
-    return (resp.text or "").strip()
+    try:
+        resp = model.generate_content(prompt)
+        return (getattr(resp, "text", "") or "").strip() or "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+    except Exception as e:
+        print(f"[ask_gemini] error: {e}")
+        return "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+
 
 # ===== Routes =====
 @app.get("/health")
