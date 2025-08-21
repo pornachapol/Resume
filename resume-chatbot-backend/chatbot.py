@@ -10,7 +10,7 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import google.generativeai as genai
 import pdfplumber
-
+import io
 # ===== ENV =====
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 RESUME_URL = os.getenv("RESUME_URL")  # ex: https://nachapol-resume.streamlit.app
@@ -167,6 +167,32 @@ def health():
 async def refresh():
     await ensure_index(force=True)
     return {"ok": True, "chunks": len(CHUNKS)}
+def build_index(chunks: List[str]):
+    global VECTORIZER, MATRIX
+    VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1, 2))
+    MATRIX = VECTORIZER.fit_transform(chunks)
+
+async def ensure_index(force=False):
+    global CHUNKS, LAST_FETCH_AT
+    if CHUNKS and not force and (time.time() - LAST_FETCH_AT < 3600):
+        return
+    text = await fetch_resume_text()
+    CHUNKS = chunk_text(text) if text else []
+    if CHUNKS:
+        build_index(CHUNKS)
+    LAST_FETCH_AT = time.time()
+
+def normalize_query(q: str) -> str:
+    ql = q.lower()
+    mapping = {
+        "ชื่อเต็ม": "full name",
+        "ชื่อจริง": "first name",
+        "นามสกุล": "surname",
+        "ชื่อ": "name",
+    }
+    for th, en in mapping.items():
+        ql = ql.replace(th, en)
+    return ql
 
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
