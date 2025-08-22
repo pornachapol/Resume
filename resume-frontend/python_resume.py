@@ -243,6 +243,14 @@ st.markdown(
         color: #000000 !important;
         border-bottom-left-radius: 6px;
     }
+
+    .bubble ul {
+      margin: 6px 0 6px 20px;
+      padding: 0;
+    }
+    .bubble li {
+      margin-bottom: 4px;
+    }
     
     /* Force text color in chat bubbles */
     .user-bubble * {
