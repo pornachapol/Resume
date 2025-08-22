@@ -155,6 +155,43 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+# Messenger-like CSS (NEW)
+st.markdown("""
+<style>
+/* ===== Messenger-like Chat ===== */
+.chat-wrap{
+  max-width: 900px; margin: 0 auto; padding: 8px 8px 0 8px;
+}
+.msg-row{ display:flex; margin: 10px 0; align-items:flex-end; }
+.msg-row.user{ justify-content:flex-end; }
+.msg-row.bot{ justify-content:flex-start; }
+.avatar{
+  width: 36px; height: 36px; border-radius: 50%; overflow:hidden; flex-shrink:0;
+  box-shadow: 0 2px 6px rgba(0,0,0,.2);
+}
+.avatar img{ width:100%; height:100%; object-fit:cover; }
+.bubble{
+  max-width: 70%;
+  padding: 10px 14px; border-radius: 18px; word-wrap: break-word; line-height: 1.45;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+}
+.msg-row.user .bubble{
+  background: #0084ff; color:#fff; border-bottom-right-radius: 6px; margin-left: 10px;
+}
+.msg-row.bot .bubble{
+  background: #f1f0f0; color:#111; border-bottom-left-radius: 6px; margin-right: 10px;
+}
+.meta{
+  font-size: 12px; opacity:.7; margin-top: 4px;
+  display: flex; gap: 8px; justify-content: flex-end;
+}
+.msg-row.bot .meta{ justify-content:flex-start; }
+.src-chip{
+  display:inline-block; font-size:11px; padding:2px 6px; border-radius:12px;
+  background:#e8eefc; color:#345; margin-right:6px; border:1px solid #d8e2ff;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Add a navigation menu
 menu = st.container()
@@ -570,37 +607,78 @@ with st.container():
 
     # Chatbot Section
     import requests
+
+    from datetime import datetime
+
+    USER_AVATAR = "https://i.imgur.com/1XK7Q9U.png"  # เปลี่ยนเป็นรูปคุณก็ได้
+    BOT_AVATAR  = "https://i.imgur.com/8Km9tLL.png"  # หรือไอคอนบอท
     
+    def render_msg(role: str, text: str, sources=None, ts=None):
+        """
+        role: "user" | "assistant"
+        text: เนื้อหาข้อความ
+        sources: list[str] (ออปชัน) เพื่อแสดงแหล่งอ้างอิงเป็นชิปเล็ก ๆ
+        ts: timestamp string (ออปชัน)
+        """
+        cls = "user" if role=="user" else "bot"
+        ava = USER_AVATAR if role=="user" else BOT_AVATAR
+        if ts is None:
+            ts = datetime.now().strftime("%H:%M")
+        src_html = ""
+        if sources:
+            chips = "".join([f'<span class="src-chip">{s}</span>' for s in sources][:5])
+            src_html = f'<div style="margin-top:6px;">{chips}</div>'
+        st.markdown(f"""
+        <div class="chat-wrap">
+          <div class="msg-row {cls}">
+            {'<div class="avatar"><img src="'+ava+'" /></div>' if cls=='bot' else ''}
+            <div class="bubble">
+              {text}
+              {src_html}
+              <div class="meta">{ts}</div>
+            </div>
+            {'<div class="avatar"><img src="'+ava+'" /></div>' if cls=='user' else ''}
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     st.divider()
     st.subheader("💬 Chat with my Resume")
     
-    # Backend URL (FastAPI ที่ Deploy บน Render)
     BACKEND_URL = os.getenv("BACKEND_URL") or st.secrets.get("BACKEND_URL")
     
     if "chat" not in st.session_state:
+        # เก็บ (role, text, ts, sources)
         st.session_state.chat = []
     
-    # แสดงประวัติการแชท
-    for role, msg in st.session_state.chat:
-        with st.chat_message(role):
-            st.markdown(msg)
+    # แสดงประวัติ
+    for role, msg, ts, srcs in st.session_state.chat:
+        render_msg(role, msg, sources=srcs, ts=ts)
     
-    # Input กล่องแชท
-    q = st.chat_input("ถามอะไรเกี่ยวกับเรซูเม่...")
+    q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย…")
     if q:
-        st.session_state.chat.append(("user", q))
-        with st.chat_message("user"):
-            st.markdown(q)
+        # ผู้ใช้ส่งข้อความ
+        now = datetime.now().strftime("%H:%M")
+        st.session_state.chat.append(("user", q, now, None))
+        render_msg("user", q, ts=now)
     
+        # เรียก backend
+        ans_text = "❌ เชื่อมต่อ Backend ไม่ได้"
+        sources = None
         try:
             r = requests.post(f"{BACKEND_URL}/chat", json={"message": q}, timeout=60)
-            ans = r.json().get("reply", "ขออภัย ระบบไม่ตอบกลับ")
-        except:
-            ans = "❌ เชื่อมต่อ Backend ไม่ได้"
+            r.raise_for_status()
+            data = r.json()
+            ans_text = data.get("reply", "ขออภัย ระบบไม่ตอบกลับ")
+            # แปลง sources จาก backend [(idx, preview), ...] → ["#0 ...", ...]
+            raw_src = data.get("sources") or []
+            sources = [f"#{i} {pre}" for i, pre in raw_src][:4]
+        except Exception as e:
+            ans_text = f"❌ เชื่อมต่อ Backend ไม่ได้\n\n`{e}`"
     
-        st.session_state.chat.append(("assistant", ans))
-        with st.chat_message("assistant"):
-            st.markdown(ans)
+        now2 = datetime.now().strftime("%H:%M")
+        st.session_state.chat.append(("assistant", ans_text, now2, sources))
+        render_msg("assistant", ans_text, sources=sources, ts=now2)
 
 # Footer
 st.markdown(
