@@ -940,10 +940,10 @@ if st.session_state.chat:
 st.markdown(
     """
     <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040; background-color: #202020;">
-        <p style="color: #000000 !important; font-size: 0.9rem; margin: 0; font-weight: 500;">
+        <p style="color: #ffffff !important; font-size: 0.9rem; margin: 0; font-weight: 500;">
             💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.
         </p>
-        <p style="color: #000000 !important; font-size: 0.9rem; margin: 0.5rem 0 0 0; font-weight: 500;">
+        <p style="color: #ffffff !important; font-size: 0.9rem; margin: 0.5rem 0 0 0; font-weight: 500;">
             Feel free to ask about specific achievements, technical expertise, or career background!
         </p>
     </div>
