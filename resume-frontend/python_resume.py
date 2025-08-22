@@ -231,7 +231,7 @@ st.markdown("""
       bottom: 24px;
       z-index: 999;
     }
-    main .block-container{ padding-bottom: 0px; }
+    main .block-container{ padding-bottom: 120px; }
     
     /* ===== Messenger-like Chat ===== */
     .chat-row{
