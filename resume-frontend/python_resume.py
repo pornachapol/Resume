@@ -250,7 +250,7 @@ st.markdown(
     }
     
     .bot-bubble * {
-        color: #000000 !important;
+        color: #ffffff !important;
     }
     
     /* Clear button styling */
