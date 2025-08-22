@@ -729,9 +729,7 @@ with st.container():
     """, unsafe_allow_html=True)
     
     # --------- แสดงประวัติการแชท ----------
-    for row in st.session_state.chat:
-        role = row.get("role")
-        msg  = row.get("text","")
+    for role, msg in st.session_state.chat:
         if role == "user":
             st.markdown(
                 f"<div class='chat-row user'>"
@@ -753,7 +751,8 @@ with st.container():
     q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย...")
     if q:
         # วาดฝั่งผู้ใช้ทันที
-        st.session_state.chat.append({"role":"user","text":q})
+        st.session_state.chat.append(("user", q))
+        st.session_state.chat.append(("assistant", ans_text))
         st.markdown(
             f"<div class='chat-row user'>"
             f"  {avatar_html(AVATAR_USER, 'U')}"
