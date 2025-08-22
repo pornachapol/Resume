@@ -134,7 +134,7 @@ st.markdown(
     
     /* Fix for Streamlit's default text color */
     p, li, div {
-        color: #ffffff;
+        color: #ffffff !important;
     }
     
     /* Fix for links color */
@@ -149,7 +149,27 @@ st.markdown(
     
     /* Fix for Streamlit's components */
     .stMarkdown, .stText {
-        color: #ffffff;
+        color: #ffffff !important;
+    }
+    
+    /* Force white text in all content sections */
+    .content-section p,
+    .content-section li,
+    .content-section div,
+    .content-section span {
+        color: #ffffff !important;
+    }
+    
+    /* Ensure footer text is visible */
+    div[style*="text-align: center"] p {
+        color: #ffffff !important;
+    }
+    
+    /* Force visibility for all text elements */
+    .stMarkdown > div,
+    .stMarkdown > div > p,
+    .stMarkdown > div > div {
+        color: #ffffff !important;
     }
     
     /* Remove default Streamlit background color from elements */
@@ -677,20 +697,20 @@ with st.container():
         """
         <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap;">
             <div>
-                <p style="margin-bottom: 0.5rem;"><strong>📍 Location</strong></p>
-                <p>Bangkok, Thailand</p>
+                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>📍 Location</strong></p>
+                <p style="color: #ffffff !important;">Bangkok, Thailand</p>
             </div>
             <div>
-                <p style="margin-bottom: 0.5rem;"><strong>📧 Email</strong></p>
-                <p><a href="mailto:r.nachapol@gmail.com">r.nachapol@gmail.com</a></p>
+                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>📧 Email</strong></p>
+                <p style="color: #ffffff !important;"><a href="mailto:r.nachapol@gmail.com">r.nachapol@gmail.com</a></p>
             </div>
             <div>
-                <p style="margin-bottom: 0.5rem;"><strong>📞 Phone</strong></p>
-                <p>064-687-7333</p>
+                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>📞 Phone</strong></p>
+                <p style="color: #ffffff !important;">064-687-7333</p>
             </div>
             <div>
-                <p style="margin-bottom: 0.5rem;"><strong>🔗 Social</strong></p>
-                <p>
+                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>🔗 Social</strong></p>
+                <p style="color: #ffffff !important;">
                     <a href="https://www.linkedin.com/in/r-nachapol" target="_blank" rel="noopener noreferrer">LinkedIn</a> | 
                     <a href="https://github.com/pornachapol" target="_blank" rel="noopener noreferrer">GitHub</a>
                 </p>
@@ -776,20 +796,11 @@ if st.session_state.chat:
         st.session_state.chat = []
         st.rerun()
 
-# Debug information (only show in development)
-if st.checkbox("Show Debug Info", value=False):
-    st.write("**Backend URL:**", st.session_state.backend_url)
-    st.write("**Chat History Length:**", len(st.session_state.chat))
-    if st.session_state.chat:
-        st.write("**Last Messages:**")
-        for role, msg in st.session_state.chat[-2:]:
-            st.write(f"- **{role}:** {msg[:100]}{'...' if len(msg) > 100 else ''}")
-
 # Footer with additional info
 st.markdown(
     """
     <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040;">
-        <p style="color: #cccccc; font-size: 0.9rem;">
+        <p style="color: #cccccc !important; font-size: 0.9rem;">
             💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.<br>
             Feel free to ask about specific achievements, technical expertise, or career background!
         </p>
