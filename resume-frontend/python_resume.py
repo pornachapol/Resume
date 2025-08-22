@@ -272,7 +272,7 @@ st.markdown("""
 <style>
 /* ปรับสไตล์กล่อง chat_input */
 div[data-testid="stChatInput"] {
-    margin-bottom: 20px !important;   /* เว้นจากขอบล่างขึ้นมา */
+    margin-bottom: 0px !important;   /* เว้นจากขอบล่างขึ้นมา */
     max-width: 900px;                 /* ให้กว้างพอดีเหมือน Messenger */
     margin-left: auto;
     margin-right: auto;
