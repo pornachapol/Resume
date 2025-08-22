@@ -20,7 +20,7 @@ st.markdown(
         /* Theme variables */
         --color-bg: #202020;
         --color-panel: #303030;
-        --color-text: #ffffff;
+        --color-text: #000000;
         --color-muted: #cccccc;
         --color-accent: #4cb5f9;
         --color-accent-2: #78d88f;
@@ -256,7 +256,7 @@ st.markdown(
     /* Clear button styling */
     .stButton > button {
         color: #000000 !important;
-        background-color: #000000 !important;
+        background-color: #f0f0f0 !important;
         border: 1px solid #cccccc !important;
     }
     
