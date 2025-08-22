@@ -184,7 +184,7 @@ def ask_opinion(question: str) -> str:
 - หลีกเลี่ยงการอ้างชื่อ/องค์กร/วันที่/ตัวเลขเฉพาะเจาะจง
 - ให้เป็นแนวปฏิบัติ/แนวคิดทั่วไปที่เป็นประโยชน์
 - เขียนสั้น กระชับ เป็นข้อ ๆ ได้ยิ่งดี
-- เริ่มด้วย "ความเห็นส่วนตัว (Opinion):"
+- เริ่มด้วย "ความเห็นจาก Chatbot:"
 
 [คำถาม]
 {question}
@@ -192,7 +192,7 @@ def ask_opinion(question: str) -> str:
     try:
         resp = model.generate_content(prompt)
         ans = (getattr(resp, "text", "") or "").strip()
-        return ans or "ความเห็นส่วนตัว (Opinion): คำถามนี้อยู่นอกเหนือ PDF จึงขอตอบเชิงมุมมองทั่วไป"
+        return ans or "ความเห็นจาก Chatbot: คำถามนี้อยู่นอกเหนือข้อมูล จึงขอตอบเชิงมุมมองทั่วไป"
     except Exception as e:
         print(f"[ask_opinion] error: {e}")
         return "ความเห็นส่วนตัว (Opinion): ขัดข้องชั่วคราว จึงตอบเชิงมุมมองทั่วไป"
@@ -638,8 +638,8 @@ def try_extract_name_heuristic(full_text: str) -> Optional[str]:
 def ask_gemini(question: str, contexts: List[str]) -> str:
     """
     พยายามตอบจากบริบท (PDF) ก่อน
-    - ถ้าพบข้อมูล → ตอบปกติ และให้ขึ้นต้นด้วย 'คำตอบจาก PDF:' เพื่อความชัดเจน
-    - ถ้าไม่พบข้อมูลในบริบท → ให้ตอบแบบ 'ความเห็นส่วนตัว (Opinion): ...'
+    - ถ้าพบข้อมูล → ตอบปกติ และให้ขึ้นต้นด้วย 'ข้อมูลจาก Profile:' เพื่อความชัดเจน
+    - ถ้าไม่พบข้อมูลในบริบท → ให้ตอบแบบ 'ความเห็นจาก Chatbot: ...'
       โดยหลีกเลี่ยงการระบุชื่อ/ตัวเลข/วันที่จำเพาะเจาะจง
     """
     model = genai.GenerativeModel(MODEL_NAME)
@@ -652,10 +652,11 @@ def ask_gemini(question: str, contexts: List[str]) -> str:
 - ถ้าคำตอบ "ไม่มีอยู่ในบริบท" ให้ตอบเป็น 'ความเห็นส่วนตัว (Opinion): ...'
   โดยเป็นคำแนะนำ/มุมมองทั่วไป หลีกเลี่ยงการสร้างชื่อ-วันเวลา-ตัวเลขที่เฉพาะเจาะจง
 - ห้ามทำให้ผู้อ่านสับสนว่าเป็นข้อเท็จจริงจาก PDF
+- ห้ามพิมพ์ว่าข้อมูลมาจาก PDF ให้บอกว่าจาก Profile
 
 รูปแบบคำตอบ:
-- ถ้าพบข้อมูลใน PDF: เริ่มด้วย "คำตอบจาก PDF: ..."
-- ถ้าไม่พบข้อมูลใน PDF: เริ่มด้วย "ความเห็นส่วนตัว (Opinion): ..."
+- ถ้าพบข้อมูลใน PDF: เริ่มด้วย "ข้อมูลจาก Profile: ..."
+- ถ้าไม่พบข้อมูลใน PDF: เริ่มด้วย "ความเห็นจาก Chatbot: ..."
 
 [บริบทจาก PDF]
 {ctx}
@@ -670,11 +671,11 @@ def ask_gemini(question: str, contexts: List[str]) -> str:
         ans = (getattr(resp, "text", "") or "").strip()
         # safety net: ถ้าโมเดลเงียบ ให้ใส่ opinion ตาม flag
         if not ans:
-            return "ความเห็นส่วนตัว (Opinion): คำถามนี้ไม่มีใน PDF จึงขอตอบเชิงมุมมองทั่วไปแบบไม่อ้างอิงข้อเท็จจริงเฉพาะเจาะจง"
+            return "ความเห็นจาก Chatbot: คำถามนี้ไม่มีในข้อมูล จึงขอตอบเชิงมุมมองทั่วไปแบบไม่อ้างอิงข้อเท็จจริงเฉพาะเจาะจง"
         return ans
     except Exception as e:
         print(f"[ask_gemini] error: {e}")
-        return "ความเห็นส่วนตัว (Opinion): เกิดข้อผิดพลาดขณะประมวลผล จึงตอบเป็นมุมมองทั่วไปโดยไม่อ้างอิงข้อเท็จจริงเฉพาะเจาะจง"
+        return "ความเห็นจาก Chatbot: เกิดข้อผิดพลาดขณะประมวลผล จึงตอบเป็นมุมมองทั่วไปโดยไม่อ้างอิงข้อเท็จจริงเฉพาะเจาะจง"
 
 def opinion_footer() -> str:
     c = PROFILE.get("contacts", {}) if isinstance(PROFILE, dict) else {}
@@ -765,7 +766,7 @@ async def chat(req: ChatRequest):
     if contexts:
         reply = ask_gemini(text_q, contexts)
         # ถ้าโมเดลตอบเป็น Opinion (ไม่ได้ยึด PDF) → เติมช่องทางติดต่อจริง
-        if reply.startswith("ความเห็นส่วนตัว (Opinion):"):
+        if reply.startswith("ความเห็นจาก Chatbot:"):
             reply += "\n\n" + opinion_footer()
     else:
         # ❗ ไม่มีคอนเท็กซ์จาก PDF
