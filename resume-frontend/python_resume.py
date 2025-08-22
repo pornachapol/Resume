@@ -24,6 +24,13 @@ st.markdown(
     font-size: 0.95rem;
     line-height: 1.4;
     }
+    <style>
+    /* กันพลาด ถ้ามี src-chip โผล่ ให้ซ่อนไปเลย */
+    .src-chip { display: none !important; }
+    /* ให้ตัวหนังสือในบับเบิลอ่านง่าย */
+    .bubble { color: #fff; }
+    .bot-bubble { color: #111; } /* ถ้าพื้นสีเทาอ่อน */
+    </style>
     
     .main-header {
         padding: 2rem 0;
@@ -667,7 +674,7 @@ with st.container():
 
     # ========================= Chatbot Section (Messenger) =========================
     st.divider()
-    st.subheader("💬 Chat with my Resume")
+    st.subheader("💬 Chat with my Profile")
     
     import requests
     from datetime import datetime
@@ -729,19 +736,14 @@ with st.container():
             ans_text = data.get("reply", "ขออภัย ระบบไม่ตอบกลับ")
             # แปลง sources จาก backend [(idx, preview), ...] → ["#0 ...", ...]
             raw_src = data.get("sources") or []
-            sources = [f"#{i} {pre}" for i, pre in raw_src][:4]
         except Exception as e:
             ans_text = f"❌ เชื่อมต่อ Backend ไม่ได้\n\n`{e}`"
     
         # ฝั่งบอท
         now2 = datetime.now().strftime("%H:%M")
         st.session_state.chat.append(("assistant", ans_text, now2, sources))
-        src_html = ""
-        if sources:
-            chips = "".join([f"<span class='src-chip'>{s}</span>" for s in sources])
-            src_html = f"<div style='margin-top:6px'>{chips}</div>"
         st.markdown(
-            f"<div class='chat-row bot'><div class='bubble bot-bubble'>{ans_text}{src_html}</div></div>",
+            f"<div class='chat-row bot'><div class='bubble bot-bubble'>{ans_text}</div></div>",
             unsafe_allow_html=True
         )
     # ============================================================================== 
