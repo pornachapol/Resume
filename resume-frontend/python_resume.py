@@ -17,8 +17,17 @@ st.markdown(
     """
     <style>
     .stApp {
-        background-color: #202020;
-        color: #ffffff;
+        /* Theme variables */
+        --color-bg: #202020;
+        --color-panel: #303030;
+        --color-text: #ffffff;
+        --color-muted: #cccccc;
+        --color-accent: #4cb5f9;
+        --color-accent-2: #78d88f;
+        --color-border: #505050;
+        --color-chip: #404040;
+        background-color: var(--color-bg);
+        color: var(--color-text);
     }
     
     /* Main sections styling */
@@ -31,32 +40,32 @@ st.markdown(
     }
     
     .content-section {
-        background-color: #303030;
+        background-color: var(--color-panel);
         padding: 1.5rem 2rem;
         border-radius: 12px;
         box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
         margin-bottom: 1.5rem;
-        color: #ffffff;
+        color: var(--color-text);
     }
     
     .section-title {
-        color: #ffffff;
+        color: var(--color-text);
         font-size: 1.8rem;
         font-weight: 600;
         margin-bottom: 1.2rem;
         padding-bottom: 0.6rem;
-        border-bottom: 2px solid #505050;
+        border-bottom: 2px solid var(--color-border);
     }
     
     .job-title {
-        color: #ffffff;
+        color: var(--color-text);
         font-size: 1.3rem;
         font-weight: 600;
         margin-bottom: 0.2rem;
     }
     
     .job-period {
-        color: #cccccc;
+        color: var(--color-muted);
         font-size: 0.9rem;
         font-style: italic;
         margin-bottom: 0.8rem;
@@ -80,7 +89,7 @@ st.markdown(
     }
     
     .profile-image {
-        border: 3px solid #404040;
+        border: 3px solid var(--color-chip);
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         border-radius: 12px;
         width: 200px;
@@ -89,8 +98,8 @@ st.markdown(
     }
     
     .skill-tag {
-        background-color: #404040;
-        color: #ffffff;
+        background-color: var(--color-chip);
+        color: var(--color-text);
         border-radius: 20px;
         padding: 5px 12px;
         margin-right: 8px;
@@ -100,20 +109,20 @@ st.markdown(
     }
     
     .project-card {
-        background-color: #404040;
+        background-color: var(--color-chip);
         border-radius: 8px;
         padding: 1rem;
         margin-bottom: 1rem;
-        border-left: 4px solid #4cb5f9;
+        border-left: 4px solid var(--color-accent);
     }
     
     .highlight {
-        color: #4cb5f9;
+        color: var(--color-accent);
         font-weight: 500;
     }
     
     .award-badge {
-        background-color: #4cb5f9;
+        background-color: var(--color-accent);
         color: #202020;
         border-radius: 4px;
         padding: 3px 8px;
@@ -123,7 +132,7 @@ st.markdown(
     }
     
     .output-badge {
-        background-color: #78d88f;
+        background-color: var(--color-accent-2);
         color: #202020;
         border-radius: 4px;
         padding: 3px 8px;
@@ -132,14 +141,12 @@ st.markdown(
         font-weight: 600;
     }
     
-    /* Fix for Streamlit's default text color */
-    p, li, div {
-        color: #ffffff !important;
+    /* Base text and link styles */
+    .stApp, .stApp p, .stApp li, .stApp div, .stApp span {
+        color: var(--color-text);
     }
-    
-    /* Fix for links color */
     a {
-        color: #4cb5f9 !important;
+        color: var(--color-accent) !important;
         text-decoration: none;
     }
     
@@ -147,55 +154,8 @@ st.markdown(
         text-decoration: underline;
     }
     
-    /* Fix for Streamlit's components */
-    .stMarkdown, .stText {
-        color: #ffffff !important;
-    }
-    
-    /* Force white text in all content sections */
-    .content-section p,
-    .content-section li,
-    .content-section div,
-    .content-section span {
-        color: #ffffff !important;
-    }
-    
-    /* Ensure footer text is visible */
-    div[style*="text-align: center"] p {
-        color: #ffffff !important;
-    }
-    
-    /* Force visibility for all text elements */
-    .stMarkdown > div,
-    .stMarkdown > div > p,
-    .stMarkdown > div > div {
-        color: #ffffff !important;
-    }
-    
-    /* Specific fixes for footer and info text */
-    div[style*="text-align: center"] {
-        color: #ffffff !important;
-    }
-    
-    div[style*="text-align: center"] * {
-        color: #ffffff !important;
-    }
-    
-    /* Override any remaining dark text */
-    .stApp * {
-        color: inherit;
-    }
-    
-    .stApp p,
-    .stApp div,
-    .stApp span {
-        color: #ffffff !important;
-    }
-    
-    /* Ensure subheader is visible */
-    .stApp h3 {
-        color: #ffffff !important;
-    }
+    /* Streamlit markdown/text blocks */
+    .stMarkdown, .stText { color: var(--color-text); }
     
     /* Remove default Streamlit background color from elements */
     div[data-testid="stVerticalBlock"] {
@@ -280,7 +240,7 @@ st.markdown(
     
     .bot-bubble {
         background: #E4E6EB;
-        color: #000000 !important;  /* เปลี่ยนเป็นสีดำ */
+        color: #000000 !important;
         border-bottom-left-radius: 6px;
     }
     
@@ -290,18 +250,18 @@ st.markdown(
     }
     
     .bot-bubble * {
-        color: #000000 !important;  /* เปลี่ยนเป็นสีดำ */
+        color: #000000 !important;
     }
     
     /* Clear button styling */
     .stButton > button {
-        color: #000000 !important;  /* สีดำก่อน hover */
+        color: #000000 !important;
         background-color: #f0f0f0 !important;
         border: 1px solid #cccccc !important;
     }
     
     .stButton > button:hover {
-        color: #ffffff !important;  /* สีขาวเมื่อ hover */
+        color: #ffffff !important;
         background-color: #ff4444 !important;
         border: 1px solid #ff4444 !important;
     }
@@ -324,12 +284,12 @@ st.markdown(
         font-size: 0.95rem !important;
         padding: 6px 12px !important;
         border-radius: 18px !important;
-        color: #000000 !important;  /* สีดำสำหรับข้อความในช่องพิมพ์ */
+        color: #000000 !important;
         background-color: #ffffff !important;
     }
     
     div[data-testid="stChatInput"] textarea::placeholder {
-        color: #666666 !important;  /* สี placeholder */
+        color: #666666 !important;
     }
     
     main .block-container {
