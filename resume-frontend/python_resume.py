@@ -400,7 +400,7 @@ st.markdown(
     
     /* Force footer info text to be black */
     div[style*="padding: 2rem"] p {
-        color: #000000 !important;
+        color: #ffffff !important;
     }
     
     /* Specific targeting for chat footer */
