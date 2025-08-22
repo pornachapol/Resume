@@ -39,13 +39,18 @@ st.markdown(
         margin-bottom: 2rem;
     }
     
-    .bubble ul {
-      margin: 4px 0 4px 16px;   /* ลด margin บน-ล่าง */
-      padding-left: 16px;       /* ระยะเยื้อง */
+    .bot-bubble ul, .bot-bubble ol {
+      margin: 0;             /* ตัด margin เริ่มต้น */
+      padding-left: 18px;    /* ระยะ indent */
     }
-    .bubble li {
-      margin-bottom: 2px;       /* ลดระยะห่างระหว่าง bullet */
-      line-height: 1.4;         /* ความสูงบรรทัดกระชับ */
+    
+    .bot-bubble li {
+      margin: 2px 0;         /* ลดช่องว่างระหว่างแต่ละ bullet */
+      line-height: 1.35;     /* ความสูงบรรทัดกระชับ */
+    }
+    .bot-bubble ul ul {
+      margin: 0;
+      padding-left: 14px;   /* ซ้อนน้อยลง */
     }
     .content-section {
         background-color: var(--color-panel);
