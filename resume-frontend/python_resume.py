@@ -707,11 +707,12 @@ with st.container():
     
     # แสดงประวัติ
     # แสดงประวัติการแชท (Messenger Style)
-    for row in st.session_state.get("chat", []):
+    # ================= Chat History Rendering =================
+# แสดงประวัติการแชท (รองรับทั้ง tuple 2 ช่อง หรือ 4 ช่อง)
+for row in st.session_state.get("chat", []):
     if isinstance(row, (list, tuple)):
         role = row[0] if len(row) > 0 else "assistant"
         msg  = row[1] if len(row) > 1 else ""
-        # ถ้ามี timestamp/sources ก็ใช้, ถ้าไม่มีก็ None
         ts   = row[2] if len(row) > 2 else None
         srcs = row[3] if len(row) > 3 else None
     else:
@@ -728,6 +729,7 @@ with st.container():
             f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}</div></div>",
             unsafe_allow_html=True
         )
+
 
     
     q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย…")
