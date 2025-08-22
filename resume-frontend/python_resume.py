@@ -255,6 +255,32 @@ st.markdown("""
   display:inline-block; font-size:11px; padding:2px 6px; border-radius:12px;
   background:#e8eefc; color:#345; margin-right:6px; border:1px solid #d8e2ff;
 }
+st.markdown("""
+<style>
+.chat-row{
+  display:flex; gap:10px; align-items:flex-end; margin:10px 0;
+}
+.chat-row.user{ justify-content:flex-end; }
+.chat-row.bot{ justify-content:flex-start; }
+
+.chat-row .avatar{
+  width:36px; height:36px; border-radius:50%;
+  background:#444; flex:0 0 36px;
+  display:flex; align-items:center; justify-content:center;
+  color:#fff; font-weight:700; font-size:14px;
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+}
+.chat-row.user .avatar{ order:2; }         /* รูป user ไปด้านขวา */
+.chat-row.user .bubble{ order:1; }
+.chat-row.bot  .avatar{ order:1; }         /* รูปบอทด้านซ้าย */
+.chat-row.bot  .bubble{ order:2; }
+
+/* สีตัวอักษรในบับเบิล */
+.bubble{ color:#fff; }
+.bot-bubble{ color:#111; } /* ถ้าพื้นสีเทาอ่อน */
+</style>
+""", unsafe_allow_html=True)
+
 
 </style>
 """, unsafe_allow_html=True)
@@ -673,78 +699,123 @@ with st.container():
 
 
     # ========================= Chatbot Section (Messenger) =========================
-    st.divider()
-    st.subheader("💬 Chat with my Profile")
-    
     import requests
     from datetime import datetime
     
-    # 1) ตั้งค่า URL ของ Backend (FastAPI)
+    st.divider()
+    st.subheader("💬 Chat with my Profile")
+    
+    # URL backend (FastAPI on Render)
     BACKEND_URL = os.getenv("BACKEND_URL") or st.secrets.get("BACKEND_URL")
     
-    if not BACKEND_URL:
-        st.warning("⚠️ ยังไม่ตั้งค่า BACKEND_URL ใน Environment หรือ st.secrets")
-        st.stop()
-    
-    # 2) สถานะการสนทนาใน session_state
-    # เก็บเป็น tuple: (role, text, ts, sources)
+    # เก็บประวัติแชทใน session_state (list ของ dicts)
     if "chat" not in st.session_state:
-        st.session_state.chat = []
+        st.session_state.chat = []   # [{"role":"user|assistant", "text":"..."}]
     
-    # ปุ่มล้างประวัติ (แก้ state พัง/ลูปเก่า)
-    cols = st.columns([1,1,6])
-    with cols[0]:
-        if st.button("🧹 ล้างแชท"):
-            st.session_state.chat = []
-            st.rerun()
-        
-    # 3) แสดงประวัติแชท (รองรับ tuple 2 ช่องเก่า/4 ช่องใหม่)
-    for row in st.session_state.get("chat", []):
-        if isinstance(row, (list, tuple)):
-            role = row[0] if len(row) > 0 else "assistant"
-            msg  = row[1] if len(row) > 1 else ""
-            ts   = row[2] if len(row) > 2 else None
-            srcs = row[3] if len(row) > 3 else None
-        else:
-            role, msg, ts, srcs = "assistant", str(row), None, None
+    # --------- Avatar config & helper ----------
+    AVATAR_USER = "https://i.imgur.com/1XK7Q9U.png"   # เปลี่ยนเป็นรูปของคุณได้
+    AVATAR_BOT  = "https://i.imgur.com/3G4cK6X.png"   # ไอคอน/โลโก้บอท
     
-        # วาดแบบ Messenger
+    def avatar_html(url=None, text_fallback="U"):
+        if url:
+            return f"<img class='avatar' src='{url}'/>"
+        return f"<div class='avatar'>{text_fallback}</div>"
+    
+    # เพิ่ม CSS โครงบับเบิล/แถว (ถ้ายังไม่มีด้านบน)
+    st.markdown("""
+    <style>
+    .chat-row{
+      display:flex; gap:10px; align-items:flex-end; margin:10px 0;
+    }
+    .chat-row.user{ justify-content:flex-end; }
+    .chat-row.bot{ justify-content:flex-start; }
+    
+    .chat-row .avatar{
+      width:36px; height:36px; border-radius:50%;
+      background:#444; flex:0 0 36px;
+      display:flex; align-items:center; justify-content:center;
+      color:#fff; font-weight:700; font-size:14px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    }
+    .chat-row.user .avatar{ order:2; }   /* รูป user ไปขวา */
+    .chat-row.user .bubble{ order:1; }
+    .chat-row.bot  .avatar{ order:1; }   /* รูปบอทซ้าย */
+    .chat-row.bot  .bubble{ order:2; }
+    
+    .bubble{
+      max-width: 70vw;
+      padding: 12px 14px;
+      border-radius: 16px;
+      line-height: 1.45;
+      font-size: .98rem;
+      box-shadow: 0 2px 8px rgba(0,0,0,.25);
+      word-wrap: break-word;
+      white-space: pre-wrap;
+    }
+    .user-bubble{
+      background: linear-gradient(180deg,#0057ff,#1a73e8);
+      color:#fff;
+      border-bottom-right-radius: 6px;
+    }
+    .bot-bubble{
+      background: #E4E6EB;
+      color:#111;
+      border-bottom-left-radius: 6px;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+    
+    # --------- แสดงประวัติการแชท ----------
+    for row in st.session_state.chat:
+        role = row.get("role")
+        msg  = row.get("text","")
         if role == "user":
             st.markdown(
-                f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>",
+                f"<div class='chat-row user'>"
+                f"  {avatar_html(AVATAR_USER, 'U')}"
+                f"  <div class='bubble user-bubble'>{msg}</div>"
+                f"</div>",
+                unsafe_allow_html=True
+            )
+        else:
+            st.markdown(
+                f"<div class='chat-row bot'>"
+                f"  {avatar_html(AVATAR_BOT, 'B')}"
+                f"  <div class='bubble bot-bubble'>{msg}</div>"
+                f"</div>",
                 unsafe_allow_html=True
             )
     
-    # 4) กล่องพิมพ์ (ถ้าไม่โชว์ แปลว่าบล็อกนี้ไม่ถูกรัน)
-    q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย…")
+    # --------- กล่องพิมพ์ (จะลอยติดล่างตาม CSS ด้านบน) ----------
+    q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย...")
     if q:
-        # ฝั่งผู้ใช้
-        now = datetime.now().strftime("%H:%M")
-        st.session_state.chat.append(("user", q, now, None))
+        # วาดฝั่งผู้ใช้ทันที
+        st.session_state.chat.append({"role":"user","text":q})
         st.markdown(
-            f"<div class='chat-row user'><div class='bubble user-bubble'>{q}</div></div>",
+            f"<div class='chat-row user'>"
+            f"  {avatar_html(AVATAR_USER, 'U')}"
+            f"  <div class='bubble user-bubble'>{q}</div>"
+            f"</div>",
             unsafe_allow_html=True
         )
     
-        # ยิงไป Backend
-        ans_text = "❌ เชื่อมต่อ Backend ไม่ได้"
-        sources = None
+        # เรียก Backend
+        ans_text = "❌ เชื่อมต่อระบบไม่ได้"
         try:
             r = requests.post(f"{BACKEND_URL}/chat", json={"message": q}, timeout=60)
-            r.raise_for_status()
-            data = r.json()
-            ans_text = data.get("reply", "ขออภัย ระบบไม่ตอบกลับ")
-            # แปลง sources จาก backend [(idx, preview), ...] → ["#0 ...", ...]
-            raw_src = data.get("sources") or []
-        except Exception as e:
-            ans_text = f"❌ เชื่อมต่อ Backend ไม่ได้\n\n`{e}`"
+            data = r.json() if r.status_code == 200 else {}
+            ans_text = data.get("reply") or "ขออภัย ระบบไม่ตอบกลับ"
+        except Exception:
+            pass
     
-        # ฝั่งบอท
-        now2 = datetime.now().strftime("%H:%M")
-        st.session_state.chat.append(("assistant", ans_text, now2, sources))
+        # วาดฝั่งบอท (ไม่โชว์ sources/ชิปใด ๆ)
+        st.session_state.chat.append({"role":"assistant","text":ans_text})
         st.markdown(
-            f"<div class='chat-row bot'><div class='bubble bot-bubble'>{ans_text}</div></div>",
+            f"<div class='chat-row bot'>"
+            f"  {avatar_html(AVATAR_BOT, 'B')}"
+            f"  <div class='bubble bot-bubble'>{ans_text}</div>"
+            f"</div>",
             unsafe_allow_html=True
         )
-    # ============================================================================== 
-    
+        # ============================================================================== 
+        
