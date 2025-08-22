@@ -4,5 +4,5 @@ httpx
 beautifulsoup4
 scikit-learn
 google-generativeai
-pdfminer.six
-pdfplumber
+pymupdf         # <-- เพิ่ม: ใช้ดึงข้อความจาก PDF ให้เนียน
+numpy
