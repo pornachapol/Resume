@@ -20,7 +20,7 @@ st.markdown(
         /* Theme variables */
         --color-bg: #202020;
         --color-panel: #303030;
-        --color-text: #000000;
+        --color-text: #ffffff;
         --color-muted: #cccccc;
         --color-accent: #4cb5f9;
         --color-accent-2: #78d88f;
@@ -29,7 +29,8 @@ st.markdown(
         background-color: var(--color-bg);
         color: var(--color-text);
     }
-    
+    .stApp p {
+        --color-text: #000000 !important;
     /* Main sections styling */
     .main-header {
         padding: 2rem 0;
