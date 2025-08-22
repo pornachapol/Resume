@@ -18,6 +18,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 RESUME_URL = os.getenv("RESUME_URL")  # e.g. https://raw.githubusercontent.com/<user>/<repo>/main/assets/Resume.pdf
 ALLOWED_ORIGINS = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS", "")).split(",") if o.strip()]
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+ALLOW_OPINION = (os.getenv("ALLOW_OPINION", "false").lower() == "true")
+
 
 if not GOOGLE_API_KEY:
     print("WARNING: GOOGLE_API_KEY not set")
@@ -48,9 +50,12 @@ VECTORIZER = None
 MATRIX = None
 LAST_FETCH_AT = 0
 
-PROFILE: Dict = {
+from typing import Optional
+
+PROFILE = {
     "name": None,
-    "contacts": {},      # {"email": "...", "phone": "...", "location": "...", "links": [...]}
+    "name_th": None,
+    "contacts": {"email": None, "phone": None, "location": None, "links": []},
     "skills": [],
     "experience": [],
     "education": [],
@@ -141,11 +146,32 @@ async def fetch_resume_text() -> str:
         return ""
 
 SECTION_HINTS = [
-    r"\b(PROFESSIONAL EXPERIENCE|EXPERIENCE)\b",
-    r"\b(EDUCATION|CERTIFICATIONS?)\b",
-    r"\b(KEY ACHIEVEMENTS|ACHIEVEMENTS)\b",
-    r"\b(AREA OF EXPERTISE|SKILLS?)\b",
-    r"\b(ADDITIONAL INFORMATION|LANGUAGES?)\b",
+    # Experience / Career
+    r"\b(PROFESSIONAL EXPERIENCE|EXPERIENCE|WORK EXPERIENCE|CAREER HISTORY|EMPLOYMENT HISTORY|WORK HISTORY|PROFESSIONAL BACKGROUND)\b",
+
+    # Education / Certifications
+    r"\b(EDUCATION|ACADEMIC BACKGROUND|QUALIFICATIONS|CERTIFICATION|CERTIFICATIONS|TRAINING|COURSES|CREDENTIALS)\b",
+
+    # Achievements / Awards
+    r"\b(KEY ACHIEVEMENTS|ACHIEVEMENTS|AWARDS|HONORS|DISTINCTIONS|RECOGNITION|MILESTONES|ACCOMPLISHMENTS)\b",
+
+    # Skills / Expertise
+    r"\b(AREA OF EXPERTISE|SKILLS?|TECHNICAL SKILLS|CORE COMPETENCIES|EXPERTISE|SPECIALTIES|CAPABILITIES|PROFICIENCIES|KNOWLEDGE AREAS)\b",
+
+    # Languages & Additional Info
+    r"\b(ADDITIONAL INFORMATION|LANGUAGES?|HOBBIES|INTERESTS|PERSONAL DETAILS|CONTACT INFORMATION|PROFILE|SUMMARY|OVERVIEW)\b",
+
+    # Projects
+    r"\b(PROJECTS|KEY PROJECTS|SELECTED PROJECTS|PROJECT EXPERIENCE|CASE STUDIES)\b",
+
+    # Objectives / Goals
+    r"\b(CAREER OBJECTIVE|OBJECTIVES|GOAL|FUTURE GOALS|PROFESSIONAL GOALS|MISSION|VISION|PASSION)\b",
+
+    # Strengths / Weaknesses / Self
+    r"\b(STRENGTHS|WEAKNESSES|AREAS FOR IMPROVEMENT|PERSONAL ATTRIBUTES|CHARACTERISTICS|VALUES)\b",
+
+    # Frameworks / Methods
+    r"\b(METHODOLOGIES|FRAMEWORKS|TOOLS|PROCESS IMPROVEMENT|LEAN SIX SIGMA|PRA|SWOT|FISHBONE|IPSO|PDCA)\b",
 ]
 
 def smart_split(text: str) -> List[str]:
@@ -329,54 +355,147 @@ def try_extract_name_heuristic(full_text: str) -> Optional[str]:
     return max(candidates, key=len) if candidates else None
 
 def answer_from_profile(q: str) -> Optional[str]:
-    ql = q.lower()
+    """
+    ตอบจาก PROFILE โดยตรงสำหรับคำถามพื้นฐาน:
+    - ชื่อ (EN/TH)
+    - ช่องทางติดต่อ (email/phone/location/linkedin/github)
+    - skills / experience / education
+    - รองรับทั้งไทย/อังกฤษ และคำถามกึ่ง ๆ (เช่น 'ชื่อ', 'ชื่ออะไร', 'your name')
+    """
+    ql = (q or "").strip().lower()
+    ql_nospace = ql.replace(" ", "")
 
-    # Name
-    if any(k in ql for k in ["ชื่ออะไร", "ชื่อคืออะไร", "full name", "your name", "name?"]):
+    c = PROFILE.get("contacts", {}) if isinstance(PROFILE, dict) else {}
+    skills = PROFILE.get("skills") or []
+    exp = PROFILE.get("experience") or []
+    edu = PROFILE.get("education") or []
+    links = c.get("links") or []
+
+    # -------- Utilities --------
+    def find_link(domain_keyword: str) -> Optional[str]:
+        for u in links:
+            if domain_keyword in u.lower():
+                return u
+        return None
+
+    # -------- Name (TH/EN) --------
+    # กรณีระบุ "ชื่อภาษาไทย" / "ชื่อไทย" ก่อน
+    if any(k in ql for k in ["ชื่อภาษาไทย", "ชื่อไทย", "thai name", "thai fullname"]):
+        if PROFILE.get("name_th"):
+            return f"ชื่อภาษาไทย: {PROFILE['name_th']}"
+        # ไม่มี name_th ก็ fallback เป็น EN
         if PROFILE.get("name"):
             return f"ชื่อ-นามสกุล: {PROFILE['name']}"
 
-    # Contact
-    if any(k in ql for k in ["ติดต่อ", "contact", "email", "อีเมล", "โทร", "phone", "linkedin", "github", "location", "ที่อยู่"]):
-        c = PROFILE.get("contacts", {})
+    # คำถามทั่วไปเรื่องชื่อ
+    if any(k in ql for k in [
+        "ชื่ออะไร", "ชื่อคืออะไร", "ชื่อจริง", "นามสกุล", "ชื่อ", 
+        "full name", "your name", "name", "name?"
+    ]) or "ชื่ออะไร" in ql_nospace:
+        if PROFILE.get("name"):
+            # ถ้ามีชื่อไทยด้วย ให้บอกทั้งคู่
+            if PROFILE.get("name_th"):
+                return f"ชื่อ-นามสกุล: {PROFILE['name']} (TH: {PROFILE['name_th']})"
+            return f"ชื่อ-นามสกุล: {PROFILE['name']}"
+
+    # -------- Contacts (ตอบเฉพาะสิ่งที่ถาม) --------
+    # Email only
+    if any(k in ql for k in ["email", "อีเมล", "อีเมล์"]):
+        if c.get("email"):
+            return f"อีเมล: {c['email']}"
+
+    # Phone only
+    if any(k in ql for k in ["phone", "โทร", "เบอร์", "เบอร์โทร", "เบอร์โทรศัพท์"]):
+        if c.get("phone"):
+            return f"เบอร์โทร: {c['phone']}"
+
+    # Location only
+    if any(k in ql for k in ["location", "ที่อยู่", "อยู่ที่ไหน", "อยู่จังหวัดอะไร"]):
+        if c.get("location"):
+            return f"ที่ตั้ง: {c['location']}"
+
+    # LinkedIn only
+    if "linkedin" in ql:
+        li = find_link("linkedin")
+        if li:
+            return f"LinkedIn: {li}"
+
+    # GitHub only
+    if "github" in ql:
+        gh = find_link("github")
+        if gh:
+            return f"GitHub: {gh}"
+
+    # Contact summary
+    if any(k in ql for k in ["ติดต่อ", "contact", "ช่องทางติดต่อ", "คอนแทค"]):
         parts = []
         if c.get("email"): parts.append(f"อีเมล: {c['email']}")
         if c.get("phone"): parts.append(f"โทร: {c['phone']}")
-        if c.get("location"): parts.append(f"พื้นที่: {c['location']}")
-        if c.get("links"): parts.append("ลิงก์: " + ", ".join(c['links']))
+        if c.get("location"): parts.append(f"ที่ตั้ง: {c['location']}")
+        li = find_link("linkedin")
+        gh = find_link("github")
+        if li: parts.append(f"LinkedIn: {li}")
+        if gh: parts.append(f"GitHub: {gh}")
         if parts:
             return " | ".join(parts)
 
-    # Skills
+    # -------- Skills --------
     if any(k in ql for k in ["ทักษะ", "skills", "skill", "สกิล"]):
-        if PROFILE.get("skills"):
-            return "ทักษะหลัก: " + ", ".join(PROFILE["skills"][:30])
+        if skills:
+            # ถ้าถามว่า top/หลัก ให้ตัดเหลือสั้น ๆ
+            if any(k in ql for k in ["หลัก", "top", "เด่น", "core"]):
+                return "ทักษะหลัก: " + ", ".join(skills[:10])
+            return "ทักษะ: " + ", ".join(skills[:30])
 
-    # Experience
-    if any(k in ql for k in ["ประสบการณ์", "experience", "เคยทำงาน", "ทำงานที่ไหน"]):
-        exp = PROFILE.get("experience") or []
+    # -------- Experience --------
+    if any(k in ql for k in ["ประสบการณ์", "experience", "เคยทำงาน", "ทำงานที่ไหน", "งานที่ผ่านมา"]):
         if exp:
+            # แสดงไม่เกิน 8 บรรทัด พอให้อ่านง่าย
             return "ประสบการณ์ (สรุป):\n- " + "\n- ".join(exp[:8])
 
-    # Education
-    if any(k in ql for k in ["การศึกษา", "education", "เรียนที่ไหน", "จบจาก"]):
-        edu = PROFILE.get("education") or []
+    # -------- Education --------
+    if any(k in ql for k in ["การศึกษา", "education", "เรียนที่ไหน", "จบจาก", "วุฒิการศึกษา"]):
         if edu:
             return "การศึกษา:\n- " + "\n- ".join(edu[:8])
 
     return None
 
+def opinion_footer() -> str:
+    """สร้าง footer ติดต่อจาก PROFILE จริง"""
+    c = PROFILE.get("contacts", {}) if isinstance(PROFILE, dict) else {}
+    parts = []
+    if c.get("email"):
+        parts.append(f"อีเมล: {c['email']}")
+    if c.get("phone"):
+        parts.append(f"โทร: {c['phone']}")
+    tail = "💡 หากต้องการข้อมูลเพิ่มเติม กรุณาติดต่อเจ้าของเรซูเม่โดยตรง"
+    if parts:
+        tail += " — " + " | ".join(parts)
+    return tail
+
 def ask_gemini(question: str, contexts: List[str]) -> str:
+    """
+    พยายามตอบจากบริบท (PDF) ก่อน
+    - ถ้าพบข้อมูล → ตอบปกติ และให้ขึ้นต้นด้วย 'คำตอบจาก PDF:' เพื่อความชัดเจน
+    - ถ้าไม่พบข้อมูลในบริบท → ให้ตอบแบบ 'ความเห็นส่วนตัว (Opinion): ...'
+      โดยหลีกเลี่ยงการระบุชื่อ/ตัวเลข/วันที่จำเพาะเจาะจง
+    """
     model = genai.GenerativeModel(MODEL_NAME)
     ctx = "\n\n---\n".join(contexts) if contexts else ""
     prompt = f"""
-คุณเป็นผู้ช่วยตอบคำถามจากไฟล์เรซูเม่ (PDF) เท่านั้น
-- อ้างอิงเฉพาะข้อมูลที่อยู่ใน [บริบท] ด้านล่าง
-- ถ้าคำถามกว้าง/ปลายเปิด ให้สรุปเป็นหัวข้อย่อ ๆ อ่านง่าย
-- ถ้าคำถามเฉพาะ ให้ดึงคำตอบตรงจากบริบท
-- ถ้าไม่มีข้อมูลในบริบท ให้ตอบว่า: "คำถามนี้ไม่มีอยู่ใน PDF"
+คุณเป็นผู้ช่วยที่ตอบคำถามจากไฟล์เรซูเม่ (PDF) เป็นหลัก
 
-[บริบท]
+กฎสำคัญ:
+- ใช้เฉพาะข้อมูลใน [บริบท] เมื่อตอบข้อเท็จจริงเกี่ยวกับผู้สมัคร
+- ถ้าคำตอบ "ไม่มีอยู่ในบริบท" ให้ตอบเป็น 'ความเห็นส่วนตัว (Opinion): ...'
+  โดยเป็นคำแนะนำ/มุมมองทั่วไป หลีกเลี่ยงการสร้างชื่อ-วันเวลา-ตัวเลขที่เฉพาะเจาะจง
+- ห้ามทำให้ผู้อ่านสับสนว่าเป็นข้อเท็จจริงจาก PDF
+
+รูปแบบคำตอบ:
+- ถ้าพบข้อมูลใน PDF: เริ่มด้วย "คำตอบจาก PDF: ..."
+- ถ้าไม่พบข้อมูลใน PDF: เริ่มด้วย "ความเห็นส่วนตัว (Opinion): ..."
+
+[บริบทจาก PDF]
 {ctx}
 
 [คำถาม]
@@ -386,26 +505,26 @@ def ask_gemini(question: str, contexts: List[str]) -> str:
 """
     try:
         resp = model.generate_content(prompt)
-        return (getattr(resp, "text", "") or "").strip() or "คำถามนี้ไม่มีอยู่ใน PDF"
+        ans = (getattr(resp, "text", "") or "").strip()
+        # safety net: ถ้าโมเดลเงียบ ให้ใส่ opinion ตาม flag
+        if not ans:
+            return "ความเห็นส่วนตัว (Opinion): คำถามนี้ไม่มีใน PDF จึงขอตอบเชิงมุมมองทั่วไปแบบไม่อ้างอิงข้อเท็จจริงเฉพาะเจาะจง"
+        return ans
     except Exception as e:
         print(f"[ask_gemini] error: {e}")
-        return "คำถามนี้ไม่มีอยู่ใน PDF"
-def is_summary_query(q: str) -> bool:
-    ql = q.lower()
-    keys = ["สรุป", "เล่าภาพรวม", "overview", "summary", "โดยรวม", "แนะนำตัว"]
-    return any(k in ql for k in keys)
+        return "ความเห็นส่วนตัว (Opinion): เกิดข้อผิดพลาดขณะประมวลผล จึงตอบเป็นมุมมองทั่วไปโดยไม่อ้างอิงข้อเท็จจริงเฉพาะเจาะจง"
 
-def summarize_all_chunks(chunks: List[str]) -> str:
-    # map-reduce เบา ๆ: สรุปทีละก้อน แล้วรวม
-    model = genai.GenerativeModel(MODEL_NAME)
-    partials = []
-    for c in chunks[:8]:  # จำกัดเพื่อความเร็ว
-        resp = model.generate_content(f"สรุปสาระสำคัญของข้อความนี้เป็น bullet ไทยสั้น ๆ:\n\n{c}")
-        partials.append((resp.text or "").strip())
-    # reduce
-    joined = "\n".join(partials)
-    resp2 = model.generate_content(f"รวมสรุปเหล่านี้ให้เป็นภาพรวมอ่านง่าย ไม่ซ้ำซ้อน:\n\n{joined}")
-    return (resp2.text or "").strip()
+def opinion_footer() -> str:
+    c = PROFILE.get("contacts", {}) if isinstance(PROFILE, dict) else {}
+    email = c.get("email")
+    phone = c.get("phone")
+    tail = "💡 หากต้องการข้อมูลเพิ่มเติม กรุณาติดต่อเจ้าของเรซูเม่โดยตรง"
+    ways = []
+    if email: ways.append(f"อีเมล: {email}")
+    if phone: ways.append(f"โทร: {phone}")
+    if ways:
+        tail += " — " + " | ".join(ways)
+    return tail
 
 
 @app.get("/context")
@@ -448,26 +567,49 @@ async def refresh():
 async def chat(req: ChatRequest):
     await ensure_index()
 
-    # 1) โจทย์พื้นฐาน → ตอบจาก PROFILE
-    direct = answer_from_profile(req.message)
+    # กันเคสข้อความว่าง
+    text_q = (req.message or "").strip()
+    if not text_q:
+        return ChatResponse(
+            reply="โปรดพิมพ์คำถาม (เช่น: ชื่ออะไร, อีเมลคืออะไร, สรุปเรซูเม่)",
+            sources=[]
+        )
+
+    # 1) ตอบจาก PROFILE ก่อน (ชื่อ/อีเมล/เบอร์/ทักษะฯลฯ)
+    direct = answer_from_profile(text_q)
     if direct:
         return ChatResponse(reply=direct, sources=[])
 
-    # 2) คำถามสรุป/ปลายเปิด
-    if is_summary_query(req.message):
+    # 2) คำถามสรุป/ปลายเปิด → summarize จาก PDF
+    if is_summary_query(text_q):
         reply = summarize_all_chunks(CHUNKS)
-        # ไม่ต้องแสดง sources ก็ได้ เพราะเป็นการสรุปรวม
         return ChatResponse(reply=reply, sources=[])
 
-    # 3) คำถามเฉพาะเจาะจง → Hybrid retrieval
-    q_norm = normalize_query(req.message)
-    hits = retrieve_hybrid(q_norm, k=5, alpha=0.6)
-    contexts = [c for _, c, _ in hits][:3]
+    # 3) Retrieval ปกติ (ถ้ามี retrieve_hybrid ให้ใช้ก่อน)
+    q_norm = normalize_query(text_q)
+    try:
+        hits = retrieve_hybrid(q_norm, k=5, alpha=0.6)  # ถ้ามีฟังก์ชันนี้
+        # hits: [(idx, chunk, score), ...]
+        contexts = [h[1] for h in hits[:3] if len(h) >= 2]
+        previews = [(h[0], (h[1][:140] + ("..." if len(h[1]) > 140 else ""))) for h in hits[:3] if len(h) >= 2]
+    except NameError:
+        hits = retrieve(q_norm, k=5)  # โหมดเดิม
+        # hits: [(idx, chunk), ...]
+        contexts = [c for _, c in hits[:3]]
+        previews = [(i, (c[:140] + ("..." if len(c) > 140 else ""))) for i, c in hits[:3]]
 
     if contexts:
-        reply = ask_gemini(req.message, contexts)
+        reply = ask_gemini(text_q, contexts)
+        # ถ้าโมเดลตอบเป็น Opinion (ไม่ได้ยึด PDF) → เติมช่องทางติดต่อจริง
+        if reply.startswith("ความเห็นส่วนตัว (Opinion):"):
+            reply += "\n\n" + opinion_footer()
     else:
-        reply = "คำถามนี้ไม่มีอยู่ใน PDF"
+        # ❗ ไม่มีคอนเท็กซ์จาก PDF
+        if ALLOW_OPINION:
+            reply = ask_opinion(text_q)
+            reply += "\n\n" + opinion_footer()
+        else:
+            reply = "คำถามนี้ไม่มีอยู่ใน PDF"
 
-    previews = [(i, (c[:140] + ("..." if len(c) > 140 else ""))) for i, c, _ in hits[:3]]
     return ChatResponse(reply=reply, sources=previews)
+
