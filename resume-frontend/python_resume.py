@@ -268,6 +268,24 @@ st.markdown("""
     .src-chip{ display:none !important; }
     </style>
     """, unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* ปรับสไตล์กล่อง chat_input */
+div[data-testid="stChatInput"] {
+    margin-bottom: 20px !important;   /* เว้นจากขอบล่างขึ้นมา */
+    max-width: 900px;                 /* ให้กว้างพอดีเหมือน Messenger */
+    margin-left: auto;
+    margin-right: auto;
+}
+
+div[data-testid="stChatInput"] textarea {
+    min-height: 36px !important;      /* ลดความสูง */
+    font-size: 0.95rem !important;    /* ปรับขนาดตัวอักษร */
+    padding: 6px 10px !important;     /* padding ข้างใน */
+    border-radius: 18px !important;   /* มนๆ แบบ Messenger */
+}
+</style>
+""", unsafe_allow_html=True)
 
 # Header Section
 with st.container():
