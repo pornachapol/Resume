@@ -220,91 +220,54 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# Messenger-like CSS (NEW)
-st.markdown("""
-<style>
-/* ===== Messenger-like Chat ===== */
-.chat-wrap{
-  max-width: 900px; margin: 0 auto; padding: 8px 8px 0 8px;
-}
-.msg-row{ display:flex; margin: 10px 0; align-items:flex-end; }
-.msg-row.user{ justify-content:flex-end; }
-.msg-row.bot{ justify-content:flex-start; }
-.avatar{
-  width: 36px; height: 36px; border-radius: 50%; overflow:hidden; flex-shrink:0;
-  box-shadow: 0 2px 6px rgba(0,0,0,.2);
-}
-.avatar img{ width:100%; height:100%; object-fit:cover; }
-.bubble{
-  max-width: 70%;
-  padding: 10px 14px; border-radius: 18px; word-wrap: break-word; line-height: 1.45;
-  box-shadow: 0 1px 4px rgba(0,0,0,.2);
-}
-.msg-row.user .bubble{
-  background: #0084ff; color:#fff; border-bottom-right-radius: 6px; margin-left: 10px;
-}
-.msg-row.bot .bubble{
-  background: #f1f0f0; color:#111; border-bottom-left-radius: 6px; margin-right: 10px;
-}
-.meta{
-  font-size: 12px; opacity:.7; margin-top: 4px;
-  display: flex; gap: 8px; justify-content: flex-end;
-}
-.msg-row.bot .meta{ justify-content:flex-start; }
-.src-chip{
-  display:inline-block; font-size:11px; padding:2px 6px; border-radius:12px;
-  background:#e8eefc; color:#345; margin-right:6px; border:1px solid #d8e2ff;
-}
-st.markdown("""
-<style>
-.chat-row{
-  display:flex; gap:10px; align-items:flex-end; margin:10px 0;
-}
-.chat-row.user{ justify-content:flex-end; }
-.chat-row.bot{ justify-content:flex-start; }
-
-.chat-row .avatar{
-  width:36px; height:36px; border-radius:50%;
-  background:#444; flex:0 0 36px;
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; font-weight:700; font-size:14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.25);
-}
-.chat-row.user .avatar{ order:2; }         /* รูป user ไปด้านขวา */
-.chat-row.user .bubble{ order:1; }
-.chat-row.bot  .avatar{ order:1; }         /* รูปบอทด้านซ้าย */
-.chat-row.bot  .bubble{ order:2; }
-
-/* สีตัวอักษรในบับเบิล */
-.bubble{ color:#fff; }
-.bot-bubble{ color:#111; } /* ถ้าพื้นสีเทาอ่อน */
-</style>
-""", unsafe_allow_html=True)
-
-
-</style>
-""", unsafe_allow_html=True)
-
-# Add a navigation menu
-menu = st.container()
-with menu:
-    st.markdown(
-        """
-        <div style="background-color: #202020; padding: 0.8rem 1rem; border-bottom: 1px solid #404040; margin-bottom: 2rem; display: flex; justify-content: space-between; align-items: center;">
-            <div>
-                <span style="color: #ffffff; font-size: 1.2rem; font-weight: 600;">Nachapol Resume</span>
-            </div>
-            <div>
-                <a href="#summary" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Summary</a>
-                <a href="#skills" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Skills</a>
-                <a href="#experience" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Experience</a>
-                <a href="#achievements" style="color: #ffffff; margin-right: 1.5rem; text-decoration: none;">Achievements</a>
-                <a href="#education" style="color: #ffffff; text-decoration: none;">Education</a>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
+# Messenger + Sticky input CSS  ✅ (แทนบล็อกเก่าทั้งหมด)
+    st.markdown("""
+    <style>
+    /* --- Sticky chat input ล่างสุด --- */
+    div[data-testid="stChatInput"]{
+      position: fixed;
+      left: 5%;
+      right: 5%;
+      bottom: 24px;
+      z-index: 999;
+    }
+    main .block-container{ padding-bottom: 120px; }
+    
+    /* ===== Messenger-like Chat ===== */
+    .chat-row{
+      display:flex; gap:10px; align-items:flex-end; margin:10px 0;
+    }
+    .chat-row.user{ justify-content:flex-end; }
+    .chat-row.bot{ justify-content:flex-start; }
+    
+    /* Avatar */
+    .chat-row .avatar{
+      width:36px; height:36px; border-radius:50%; overflow:hidden; flex:0 0 36px;
+      box-shadow: 0 2px 6px rgba(0,0,0,.25);
+    }
+    .chat-row .avatar img{ width:100%; height:100%; object-fit:cover; }
+    
+    /* Bubbles */
+    .bubble{
+      max-width:70%;
+      padding:10px 14px;
+      border-radius:18px;
+      line-height:1.45;
+      box-shadow:0 1px 4px rgba(0,0,0,.2);
+      word-wrap:break-word;
+      white-space:pre-wrap;
+    }
+    .user-bubble{
+      background:#0084ff; color:#fff; border-bottom-right-radius:6px;
+    }
+    .bot-bubble{
+      background:#f1f0f0; color:#111; border-bottom-left-radius:6px;
+    }
+    
+    /* ซ่อนชิปแหล่งที่มา (ถ้ายังมี) */
+    .src-chip{ display:none !important; }
+    </style>
+    """, unsafe_allow_html=True)
 
 # Header Section
 with st.container():
