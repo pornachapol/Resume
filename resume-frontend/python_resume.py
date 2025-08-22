@@ -155,6 +155,59 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+st.markdown(
+    """
+    <style>
+    /* Messenger Chat Bubble Style */
+    .chat-container {
+        max-width: 600px;
+        margin: auto;
+    }
+
+    .bubble {
+        display: inline-block;
+        padding: 10px 14px;
+        margin: 8px;
+        border-radius: 18px;
+        font-size: 15px;
+        line-height: 1.4;
+        max-width: 80%;
+        word-wrap: break-word;
+    }
+
+    /* User message (ขวา) */
+    .user-bubble {
+        background-color: #0084FF;
+        color: white;
+        align-self: flex-end;
+        border-bottom-right-radius: 4px;
+    }
+
+    /* Bot message (ซ้าย) */
+    .bot-bubble {
+        background-color: #E4E6EB;
+        color: black;
+        align-self: flex-start;
+        border-bottom-left-radius: 4px;
+    }
+
+    .chat-row {
+        display: flex;
+        align-items: flex-end;
+    }
+
+    .chat-row.user {
+        justify-content: flex-end;
+    }
+
+    .chat-row.bot {
+        justify-content: flex-start;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 # Messenger-like CSS (NEW)
 st.markdown("""
 <style>
@@ -190,6 +243,7 @@ st.markdown("""
   display:inline-block; font-size:11px; padding:2px 6px; border-radius:12px;
   background:#e8eefc; color:#345; margin-right:6px; border:1px solid #d8e2ff;
 }
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -652,8 +706,13 @@ with st.container():
         st.session_state.chat = []
     
     # แสดงประวัติ
-    for role, msg, ts, srcs in st.session_state.chat:
-        render_msg(role, msg, sources=srcs, ts=ts)
+    # แสดงประวัติการแชท (Messenger Style)
+    for role, msg in st.session_state.chat:
+        if role == "user":
+            st.markdown(f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>", unsafe_allow_html=True)
+        else:
+            st.markdown(f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}</div></div>", unsafe_allow_html=True)
+
     
     q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย…")
     if q:
