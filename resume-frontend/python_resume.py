@@ -221,7 +221,7 @@ st.markdown(
 )
 
 # Messenger + Sticky input CSS  ✅ (แทนบล็อกเก่าทั้งหมด)
-    st.markdown("""
+st.markdown("""
     <style>
     /* --- Sticky chat input ล่างสุด --- */
     div[data-testid="stChatInput"]{
