@@ -10,7 +10,8 @@ from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import google.generativeai as genai
-import pdfplumber
+import fitz  # PyMuPDF
+import numpy as np
 
 # ===================== ENV =====================
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
@@ -66,20 +67,51 @@ def html_to_text(html: str) -> str:
         t.decompose()
     return clean(soup.get_text(" "))
 
-def chunk_text(text: str, size=1200, overlap=200) -> List[str]:
-    out, i = [], 0
-    if not text:
-        return out
-    while i < len(text):
-        out.append(text[i:i+size])
-        i += max(1, size - overlap)
-    return out
+def chunk_text(text: str, size=1800, overlap=350) -> List[str]:
+    blocks = smart_split(text)   # แยกเป็นบล็อกก่อน
+    chunks = []
+    for blk in blocks:
+        i = 0
+        while i < len(blk):
+            chunks.append(blk[i:i+size])
+            i += max(1, size - overlap)
+    return chunks
+
+def embed_texts(texts: List[str]) -> np.ndarray:
+    """
+    ใช้ Google AI Studio: text-embedding-004
+    คืนค่าเป็น np.ndarray shape (N, D)
+    """
+    if not texts:
+        return np.zeros((0, 1))
+    try:
+        resp = genai.embed_content(
+            model="text-embedding-004",
+            content=texts,
+            task_type="retrieval_document"  # บอกว่างานนี้สำหรับดึงเอกสาร
+        )
+        # resp["embedding"] เมื่อส่ง 1 รายการ / resp["embeddings"] เมื่อส่งหลายรายการ (SDK อาจต่างเวอร์ชัน)
+        embs = resp.get("embeddings") or resp.get("embedding")
+        if isinstance(embs, list) and isinstance(embs[0], dict) and "values" in embs[0]:
+            vecs = np.array([e["values"] for e in embs], dtype="float32")
+        elif isinstance(embs, dict) and "values" in embs:
+            vecs = np.array([embs["values"]], dtype="float32")
+        else:
+            # บาง SDK: resp เป็น list ของ float[]
+            vecs = np.array(embs, dtype="float32")
+        # ปกติ vectorize เพื่อความปลอดภัย
+        return vecs
+    except Exception as e:
+        print(f"[embed_texts] error: {e}")
+        return np.zeros((len(texts), 1), dtype="float32")
+
+EMB_MATRIX = None  # np.ndarray (num_chunks, dim)
 
 async def fetch_resume_text() -> str:
     """
-    ดึงเนื้อหาเรซูเม่จาก RESUME_URL
-    - ถ้าเป็น PDF: ใช้ pdfplumber แปลง PDF -> ข้อความ
-    - ถ้าเป็น HTML: ใช้ BeautifulSoup แปลง HTML -> ข้อความ
+    ดึงเนื้อหาจาก RESUME_URL
+    - ถ้าเป็น PDF: ใช้ PyMuPDF (fitz) ดึงข้อความ (แม่นกับเลย์เอาต์แน่น ๆ)
+    - ถ้าเป็น HTML: ใช้ BeautifulSoup
     """
     if not RESUME_URL:
         return ""
@@ -90,14 +122,16 @@ async def fetch_resume_text() -> str:
             r.raise_for_status()
             content_type = (r.headers.get("Content-Type") or "").lower()
 
-            # PDF
             if "application/pdf" in content_type or RESUME_URL.lower().endswith(".pdf"):
-                with pdfplumber.open(io.BytesIO(r.content)) as pdf:
-                    pages = []
-                    for page in pdf.pages:
-                        txt = page.extract_text() or ""
-                        if txt:
-                            pages.append(txt)
+                # อ่าน PDF ด้วย PyMuPDF
+                doc = fitz.open(stream=r.content, filetype="pdf")
+                pages = []
+                for p in doc:
+                    # ใช้ textpage.extractTEXT() ที่เรียงลำดับตาม layout ได้ดีกว่า get_text("text")
+                    tp = p.get_textpage()
+                    txt = tp.extractTEXT() or ""
+                    if txt.strip():
+                        pages.append(txt)
                 return clean("\n".join(pages))
 
             # HTML
@@ -106,6 +140,32 @@ async def fetch_resume_text() -> str:
         print(f"[fetch_resume_text] error: {e}")
         return ""
 
+SECTION_HINTS = [
+    r"\b(PROFESSIONAL EXPERIENCE|EXPERIENCE)\b",
+    r"\b(EDUCATION|CERTIFICATIONS?)\b",
+    r"\b(KEY ACHIEVEMENTS|ACHIEVEMENTS)\b",
+    r"\b(AREA OF EXPERTISE|SKILLS?)\b",
+    r"\b(ADDITIONAL INFORMATION|LANGUAGES?)\b",
+]
+
+def smart_split(text: str) -> List[str]:
+    # แยกเป็นบล็อกเมื่อเจอหัวข้อใหญ่ ๆ
+    if not text:
+        return []
+    lines = text.splitlines()
+    blocks, cur = [], []
+    import re as _re
+    for ln in lines:
+        if any(_re.search(pat, ln.strip(), flags=_re.IGNORECASE) for pat in SECTION_HINTS):
+            if cur:
+                blocks.append("\n".join(cur).strip())
+                cur = []
+        cur.append(ln)
+    if cur:
+        blocks.append("\n".join(cur).strip())
+    # ถ้า detect ไม่ได้ ก็คืนทั้งก้อน
+    return [b for b in blocks if b] or [text]
+    
 def parse_profile(full_text: str):
     """
     สกัดข้อมูลหลักจากข้อความเรซูเม่เป็น PROFILE dict:
@@ -183,9 +243,15 @@ def parse_profile(full_text: str):
     }
 
 def build_index(chunks: List[str]):
-    global VECTORIZER, MATRIX
-    VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1, 2))
+    global VECTORIZER, MATRIX, EMB_MATRIX
+    VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1,2))
     MATRIX = VECTORIZER.fit_transform(chunks)
+    EMB_MATRIX = embed_texts(chunks)  # <- เพิ่มฝั่งเวคเตอร์
+    # L2 normalize เพื่อง่ายต่อคอสไซน์
+    if EMB_MATRIX is not None and EMB_MATRIX.size > 0:
+        norms = np.linalg.norm(EMB_MATRIX, axis=1, keepdims=True) + 1e-12
+        EMB_MATRIX = EMB_MATRIX / norms
+
 
 async def ensure_index(force=False):
     global CHUNKS, LAST_FETCH_AT, PROFILE
@@ -214,13 +280,37 @@ def normalize_query(q: str) -> str:
         ql = ql.replace(k, v)
     return ql
 
-def retrieve(q: str, k=5):
+def retrieve_hybrid(q: str, k=5, alpha=0.6):
+    """
+    alpha: น้ำหนักของ embedding (semantic)
+    (1-alpha): น้ำหนัก TF-IDF (keyword)
+    """
     if not CHUNKS or VECTORIZER is None:
         return []
+    # TF-IDF
     qv = VECTORIZER.transform([q])
-    sims = cosine_similarity(qv, MATRIX).ravel()
-    order = sims.argsort()[::-1][:k]
-    return [(int(i), CHUNKS[int(i)]) for i in order if sims[int(i)] > 0.01]
+    sims_tfidf = cosine_similarity(qv, MATRIX).ravel()
+
+    # Embedding
+    emb_q = embed_texts([q])
+    if emb_q is not None and emb_q.size > 0 and EMB_MATRIX is not None and EMB_MATRIX.size > 0:
+        qn = emb_q / (np.linalg.norm(emb_q, axis=1, keepdims=True) + 1e-12)
+        sims_vec = (EMB_MATRIX @ qn.T).ravel()
+    else:
+        sims_vec = np.zeros_like(sims_tfidf)
+
+    # Normalize ทั้งสองฝั่ง
+    def norm(x):
+        x = x - x.min()
+        m = x.max() or 1.0
+        return x / m
+    s1 = norm(sims_tfidf)
+    s2 = norm(sims_vec)
+
+    hybrid = alpha * s2 + (1 - alpha) * s1
+    order = np.argsort(hybrid)[::-1][:k]
+    return [(int(i), CHUNKS[int(i)], float(hybrid[int(i)])) for i in order if hybrid[int(i)] > 0.01]
+
 
 def try_extract_name_heuristic(full_text: str) -> Optional[str]:
     if not full_text:
@@ -279,29 +369,44 @@ def answer_from_profile(q: str) -> Optional[str]:
 def ask_gemini(question: str, contexts: List[str]) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
     ctx = "\n\n---\n".join(contexts) if contexts else ""
-
-    # ✅ DEBUG: ดูว่าเราส่งอะไรให้โมเดลอ่าน
-    print("==== GEMINI CONTEXT BEGIN ====")
-    print(ctx[:2000])  # แสดงแค่ 2000 ตัวอักษรแรกพอ
-    print("==== GEMINI CONTEXT END ====")
-
     prompt = f"""
-คุณเป็นผู้ช่วยตอบคำถามจากเรซูเม่เท่านั้น
-ห้ามเดา ถ้าไม่พบในบริบทให้ตอบว่า "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
-ตอบภาษาไทยสั้น กระชับ
+คุณเป็นผู้ช่วยตอบคำถามจากไฟล์เรซูเม่ (PDF) เท่านั้น
+- อ้างอิงเฉพาะข้อมูลที่อยู่ใน [บริบท] ด้านล่าง
+- ถ้าคำถามกว้าง/ปลายเปิด ให้สรุปเป็นหัวข้อย่อ ๆ อ่านง่าย
+- ถ้าคำถามเฉพาะ ให้ดึงคำตอบตรงจากบริบท
+- ถ้าไม่มีข้อมูลในบริบท ให้ตอบว่า: "คำถามนี้ไม่มีอยู่ใน PDF"
 
-[บริบทจากเรซูเม่]
+[บริบท]
 {ctx}
 
 [คำถาม]
 {question}
+
+โปรดตอบเป็นภาษาไทย กระชับ ชัดเจน
 """
     try:
         resp = model.generate_content(prompt)
-        return (getattr(resp, "text", "") or "").strip() or "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+        return (getattr(resp, "text", "") or "").strip() or "คำถามนี้ไม่มีอยู่ใน PDF"
     except Exception as e:
         print(f"[ask_gemini] error: {e}")
-        return "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+        return "คำถามนี้ไม่มีอยู่ใน PDF"
+def is_summary_query(q: str) -> bool:
+    ql = q.lower()
+    keys = ["สรุป", "เล่าภาพรวม", "overview", "summary", "โดยรวม", "แนะนำตัว"]
+    return any(k in ql for k in keys)
+
+def summarize_all_chunks(chunks: List[str]) -> str:
+    # map-reduce เบา ๆ: สรุปทีละก้อน แล้วรวม
+    model = genai.GenerativeModel(MODEL_NAME)
+    partials = []
+    for c in chunks[:8]:  # จำกัดเพื่อความเร็ว
+        resp = model.generate_content(f"สรุปสาระสำคัญของข้อความนี้เป็น bullet ไทยสั้น ๆ:\n\n{c}")
+        partials.append((resp.text or "").strip())
+    # reduce
+    joined = "\n".join(partials)
+    resp2 = model.generate_content(f"รวมสรุปเหล่านี้ให้เป็นภาพรวมอ่านง่าย ไม่ซ้ำซ้อน:\n\n{joined}")
+    return (resp2.text or "").strip()
+
 
 @app.get("/context")
 async def get_context():
@@ -342,21 +447,27 @@ async def refresh():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     await ensure_index()
-    q_norm = normalize_query(req.message)
 
-    # ✅ เช็กจาก PROFILE ก่อน
-    reply = answer_from_profile(req.message)   # <--- เพิ่มตรงนี้
-    if reply:
+    # 1) โจทย์พื้นฐาน → ตอบจาก PROFILE
+    direct = answer_from_profile(req.message)
+    if direct:
+        return ChatResponse(reply=direct, sources=[])
+
+    # 2) คำถามสรุป/ปลายเปิด
+    if is_summary_query(req.message):
+        reply = summarize_all_chunks(CHUNKS)
+        # ไม่ต้องแสดง sources ก็ได้ เพราะเป็นการสรุปรวม
         return ChatResponse(reply=reply, sources=[])
 
-    # ถ้าไม่เจอ → ไปที่ retrieval ตามเดิม
-    hits = retrieve(q_norm, k=5)
+    # 3) คำถามเฉพาะเจาะจง → Hybrid retrieval
+    q_norm = normalize_query(req.message)
+    hits = retrieve_hybrid(q_norm, k=5, alpha=0.6)
+    contexts = [c for _, c, _ in hits][:3]
 
-    contexts = [c for _, c in hits][:3]
     if contexts:
         reply = ask_gemini(req.message, contexts)
     else:
-        reply = "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+        reply = "คำถามนี้ไม่มีอยู่ใน PDF"
 
-    previews = [(i, (c[:140] + ("..." if len(c) > 140 else ""))) for i, c in hits[:3]]
+    previews = [(i, (c[:140] + ("..." if len(c) > 140 else ""))) for i, c, _ in hits[:3]]
     return ChatResponse(reply=reply, sources=previews)
