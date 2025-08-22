@@ -220,7 +220,7 @@ st.markdown(
     .stApp p,
     .stApp div,
     .stApp span {
-        color: #ffffff !important;
+        color: #020202 !important;
     }
     
     /* Ensure subheader is visible */
