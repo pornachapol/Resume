@@ -48,10 +48,7 @@ st.markdown(
       margin: 2px 0;         /* ลดช่องว่างระหว่างแต่ละ bullet */
       line-height: 1.35;     /* ความสูงบรรทัดกระชับ */
     }
-    .bot-bubble ul ul {
-      margin: 0;
-      padding-left: 14px;   /* ซ้อนน้อยลง */
-    }
+
     .content-section {
         background-color: var(--color-panel);
         padding: 1.5rem 2rem;
