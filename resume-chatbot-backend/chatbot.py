@@ -200,21 +200,23 @@ def ask_opinion(question: str) -> str:
 def summarize_all_chunks(chunks: List[str]) -> str:
     """
     สรุปทั้งเอกสารแบบ map-reduce:
-    - มีเนื้อหา → 'สรุปจาก PDF: ...'
+    - มีเนื้อหา → ส่งสรุปโดยใช้คำว่า 'ข้อมูลในระบบ'
     - ไม่มีเนื้อหา → ถ้า ALLOW_OPINION true → ความเห็นส่วนตัว (Opinion)
     """
     if not chunks:
-        # ไม่มีคอนเท็กซ์เลย → fallback เป็นความเห็น (ถ้าเปิด)
         if ALLOW_OPINION:
             return ask_opinion("ช่วยสรุปภาพรวมโปรไฟล์/เรซูเม่แบบทั่วไป") + "\n\n" + opinion_footer()
-        return "คำถามนี้ไม่มีอยู่ใน PDF"
+        return "คำถามนี้ไม่มีอยู่ในข้อมูลในระบบ"
 
     model = genai.GenerativeModel(MODEL_NAME)
 
     partials = []
-    for c in chunks[:8]:  # จำกัดเพื่อความเร็ว
+    for c in chunks[:8]:
         try:
-            r = model.generate_content(f"สรุปสาระสำคัญจากข้อความนี้เป็น bullet ภาษาไทยสั้น ๆ:\n\n{c}")
+            r = model.generate_content(
+                "สรุปสาระสำคัญของข้อความนี้เป็น bullet ภาษาไทยสั้น ๆ "
+                "โดยห้ามขึ้นต้นด้วยคำว่า 'สรุปจากข้อมูลในระบบ' หรือคำคล้ายกัน:\n\n" + c
+            )
             partials.append((r.text or "").strip())
         except Exception as e:
             print(f"[summarize] chunk error: {e}")
@@ -223,22 +225,40 @@ def summarize_all_chunks(chunks: List[str]) -> str:
     if not joined:
         if ALLOW_OPINION:
             return ask_opinion("ช่วยสรุปภาพรวมโปรไฟล์/เรซูเม่แบบทั่วไป") + "\n\n" + opinion_footer()
-        return "คำถามนี้ไม่มีอยู่ใน PDF"
+        return "คำถามนี้ไม่มีอยู่ในข้อมูลในระบบ"
 
     try:
-        r2 = model.generate_content(f"รวมสรุปต่อไปนี้ให้เป็นภาพรวมอ่านง่าย ไม่ซ้ำซ้อน:\n\n{joined}")
+        r2 = model.generate_content(
+            "รวมสรุปต่อไปนี้ให้เป็นภาพรวมอ่านง่าย ไม่ซ้ำซ้อน เป็นภาษาไทย "
+            "และอย่าใส่คำขึ้นต้นเช่น 'สรุปจากข้อมูลในระบบ':\n\n" + joined
+        )
         final_sum = (r2.text or "").strip()
+
+        # cleanup prefix ถ้าโมเดลเผลอใส่มา
+        if final_sum:
+            bad_prefixes = [
+                "สรุปจากข้อมูลในระบบ:", "สรุปจากข้อมูลในระบบ",
+                "จากข้อมูลในระบบ:", "จากข้อมูลในระบบ"
+            ]
+            fs_lower = final_sum.lower().lstrip()
+            for bp in bad_prefixes:
+                if fs_lower.startswith(bp):
+                    cut_len = len(final_sum) - len(fs_lower)
+                    final_sum = final_sum[cut_len + len(bp):].lstrip(": \n-")
+                    break
+
         if not final_sum:
             if ALLOW_OPINION:
                 return ask_opinion("ช่วยสรุปภาพรวมโปรไฟล์/เรซูเม่แบบทั่วไป") + "\n\n" + opinion_footer()
-            return "คำถามนี้ไม่มีอยู่ใน PDF"
-        return "สรุปจาก PDF:\n" + final_sum
+            return "คำถามนี้ไม่มีอยู่ในข้อมูลในระบบ"
+
+        return final_sum
+
     except Exception as e:
         print(f"[summarize reduce] error: {e}")
         if ALLOW_OPINION:
             return ask_opinion("ช่วยสรุปภาพรวมโปรไฟล์/เรซูเม่แบบทั่วไป") + "\n\n" + opinion_footer()
-        return "คำถามนี้ไม่มีอยู่ใน PDF"
-
+        return "คำถามนี้ไม่มีอยู่ในข้อมูลในระบบ"
 
 def clean(txt: str) -> str:
     return re.sub(r"\s+", " ", txt or "").strip()
