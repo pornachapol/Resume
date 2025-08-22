@@ -239,8 +239,8 @@ st.markdown(
     }
     
     .bot-bubble {
-        background: #E4E6EB;
-        color: #000000 !important;
+        background: #404040;
+        color: #ffffff !important;
         border-bottom-left-radius: 6px;
     }
     
