@@ -29,8 +29,7 @@ st.markdown(
         background-color: var(--color-bg);
         color: var(--color-text);
     }
-    .stApp p {
-        --color-text: #000000 !important;
+    
     /* Main sections styling */
     .main-header {
         padding: 2rem 0;
