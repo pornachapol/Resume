@@ -21,37 +21,6 @@ st.markdown(
         color: #ffffff;
     }
     
-    /* Navigation Menu */
-    .nav-container {
-        background-color: #303030;
-        padding: 1rem 2rem;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-        margin-bottom: 2rem;
-        text-align: center;
-    }
-    
-    .nav-button {
-        display: inline-block;
-        background-color: #404040;
-        color: #ffffff;
-        padding: 0.6rem 1.2rem;
-        margin: 0.3rem;
-        border-radius: 8px;
-        text-decoration: none;
-        font-weight: 500;
-        transition: all 0.3s ease;
-        border: 1px solid #505050;
-    }
-    
-    .nav-button:hover {
-        background-color: #4cb5f9;
-        color: #ffffff;
-        text-decoration: none;
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(76, 181, 249, 0.3);
-    }
-    
     /* Main sections styling */
     .main-header {
         padding: 2rem 0;
@@ -220,7 +189,7 @@ st.markdown(
     .stApp p,
     .stApp div,
     .stApp span {
-        color: #020202 !important;
+        color: #ffffff !important;
     }
     
     /* Ensure subheader is visible */
@@ -311,7 +280,7 @@ st.markdown(
     
     .bot-bubble {
         background: #E4E6EB;
-        color: #000000 !important;
+        color: #000000 !important;  /* เปลี่ยนเป็นสีดำ */
         border-bottom-left-radius: 6px;
     }
     
@@ -321,18 +290,18 @@ st.markdown(
     }
     
     .bot-bubble * {
-        color: #000000 !important;
+        color: #000000 !important;  /* เปลี่ยนเป็นสีดำ */
     }
     
-    /* Clear button styling - เปลี่ยนสีข้อความเป็นดำก่อน hover */
+    /* Clear button styling */
     .stButton > button {
-        color: #000000 !important;
+        color: #000000 !important;  /* สีดำก่อน hover */
         background-color: #f0f0f0 !important;
         border: 1px solid #cccccc !important;
     }
     
     .stButton > button:hover {
-        color: #ffffff !important;
+        color: #ffffff !important;  /* สีขาวเมื่อ hover */
         background-color: #ff4444 !important;
         border: 1px solid #ff4444 !important;
     }
@@ -355,17 +324,16 @@ st.markdown(
         font-size: 0.95rem !important;
         padding: 6px 12px !important;
         border-radius: 18px !important;
-        color: #000000 !important;
+        color: #000000 !important;  /* สีดำสำหรับข้อความในช่องพิมพ์ */
         background-color: #ffffff !important;
     }
     
     div[data-testid="stChatInput"] textarea::placeholder {
-        color: #666666 !important;
+        color: #666666 !important;  /* สี placeholder */
     }
     
     main .block-container {
         padding-bottom: 120px;
-        background-color: #202020 !important;
     }
     
     .chat-row:last-child {
@@ -375,37 +343,6 @@ st.markdown(
     /* Hide source chips */
     .src-chip {
         display: none !important;
-    }
-    
-    /* Fix white bar at bottom - เปลี่ยนพื้นหลังเป็นสีดำ */
-    .stApp > div {
-        background-color: #202020 !important;
-    }
-    
-    /* Force main app background */
-    .main {
-        background-color: #202020 !important;
-    }
-    
-    /* Force footer background */
-    .stApp footer {
-        background-color: #202020 !important;
-    }
-    
-    /* Chat info text color - เปลี่ยนเป็นสีดำ */
-    div[style*="text-align: center"] p,
-    div[style*="border-top"] p {
-        color: #000000 !important;
-    }
-    
-    /* Force footer info text to be black */
-    div[style*="padding: 2rem"] p {
-        color: #ffffff !important;
-    }
-    
-    /* Specific targeting for chat footer */
-    div[style*="border-top: 1px solid #404040"] p {
-        color: #000000 !important;
     }
     
     /* Responsive design fixes */
@@ -422,11 +359,6 @@ st.markdown(
         div[data-testid="stChatInput"] {
             left: 2%;
             right: 2%;
-        }
-        
-        .nav-button {
-            font-size: 0.85rem;
-            padding: 0.5rem 1rem;
         }
     }
     </style>
@@ -474,24 +406,6 @@ def safe_request(url, data, timeout=30):
         return {"error": "An error occurred while processing your request."}
     except Exception as e:
         return {"error": f"Unexpected error: {str(e)}"}
-
-# Navigation Menu
-with st.container():
-    st.markdown('<div class="nav-container">', unsafe_allow_html=True)
-    st.markdown(
-        """
-        <div style="text-align: center;">
-            <a href="#summary" class="nav-button">📝 Summary</a>
-            <a href="#skills" class="nav-button">🛠️ Skills</a>
-            <a href="#experience" class="nav-button">💼 Experience</a>
-            <a href="#achievements" class="nav-button">🏆 Achievements</a>
-            <a href="#education" class="nav-button">🎓 Education</a>
-            <a href="#contact" class="nav-button">📞 Contact</a>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
 
 # Header Section
 with st.container():
@@ -828,7 +742,7 @@ with st.container():
 
 # Contact Footer
 with st.container():
-    st.markdown('<div class="content-section" id="contact" style="text-align: center; padding: 2rem;">', unsafe_allow_html=True)
+    st.markdown('<div class="content-section" style="text-align: center; padding: 2rem;">', unsafe_allow_html=True)
     st.markdown('<h2 class="section-title" style="border-bottom: none;">Contact Information</h2>', unsafe_allow_html=True)
     
     st.markdown(
@@ -939,11 +853,11 @@ if st.session_state.chat:
 # Footer with additional info
 st.markdown(
     """
-    <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040; background-color: #202020;">
-        <p style="color: #ffffff !important; font-size: 0.9rem; margin: 0; font-weight: 500;">
+    <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040; color: #ffffff !important;">
+        <p style="color: #cccccc !important; font-size: 0.9rem; margin: 0;">
             💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.
         </p>
-        <p style="color: #ffffff !important; font-size: 0.9rem; margin: 0.5rem 0 0 0; font-weight: 500;">
+        <p style="color: #cccccc !important; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
             Feel free to ask about specific achievements, technical expertise, or career background!
         </p>
     </div>
