@@ -342,31 +342,21 @@ async def refresh():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(req: ChatRequest):
     await ensure_index()
-
-    # 1) ลองตอบจาก PROFILE ก่อน (เร็วและชัวร์)
-    direct = answer_from_profile(req.message)
-    if direct:
-        return ChatResponse(reply=direct, sources=[])
-
-    # 2) ไม่พอ → ใช้ retrieval + โมเดล
     q_norm = normalize_query(req.message)
+
+    # ✅ เช็กจาก PROFILE ก่อน
+    reply = answer_from_profile(req.message)   # <--- เพิ่มตรงนี้
+    if reply:
+        return ChatResponse(reply=reply, sources=[])
+
+    # ถ้าไม่เจอ → ไปที่ retrieval ตามเดิม
     hits = retrieve(q_norm, k=5)
 
-    reply: Optional[str] = None
-
-    # เสริม heuristics กรณีถามชื่อแบบสั้นมาก
-    if ("name" in q_norm or "surname" in q_norm or "full name" in q_norm or "first name" in q_norm) and not hits:
-        text = " ".join(CHUNKS) if CHUNKS else ""
-        maybe_name = try_extract_name_heuristic(text)
-        if maybe_name:
-            reply = f"ชื่อ-นามสกุล (จากเรซูเม่): {maybe_name}"
-
     contexts = [c for _, c in hits][:3]
-    if not reply:
-        if contexts:
-            reply = ask_gemini(req.message, contexts)
-        else:
-            reply = "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+    if contexts:
+        reply = ask_gemini(req.message, contexts)
+    else:
+        reply = "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
 
     previews = [(i, (c[:140] + ("..." if len(c) > 140 else ""))) for i, c in hits[:3]]
     return ChatResponse(reply=reply, sources=previews)
