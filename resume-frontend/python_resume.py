@@ -280,7 +280,7 @@ st.markdown(
     
     .bot-bubble {
         background: #E4E6EB;
-        color: #111111 !important;
+        color: #000000 !important;  /* เปลี่ยนเป็นสีดำ */
         border-bottom-left-radius: 6px;
     }
     
@@ -290,7 +290,20 @@ st.markdown(
     }
     
     .bot-bubble * {
-        color: #111111 !important;
+        color: #000000 !important;  /* เปลี่ยนเป็นสีดำ */
+    }
+    
+    /* Clear button styling */
+    .stButton > button {
+        color: #000000 !important;  /* สีดำก่อน hover */
+        background-color: #f0f0f0 !important;
+        border: 1px solid #cccccc !important;
+    }
+    
+    .stButton > button:hover {
+        color: #ffffff !important;  /* สีขาวเมื่อ hover */
+        background-color: #ff4444 !important;
+        border: 1px solid #ff4444 !important;
     }
     
     /* Sticky chat input */
@@ -311,6 +324,12 @@ st.markdown(
         font-size: 0.95rem !important;
         padding: 6px 12px !important;
         border-radius: 18px !important;
+        color: #000000 !important;  /* สีดำสำหรับข้อความในช่องพิมพ์ */
+        background-color: #ffffff !important;
+    }
+    
+    div[data-testid="stChatInput"] textarea::placeholder {
+        color: #666666 !important;  /* สี placeholder */
     }
     
     main .block-container {
