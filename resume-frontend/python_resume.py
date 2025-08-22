@@ -243,14 +243,6 @@ st.markdown(
         color: #000000 !important;
         border-bottom-left-radius: 6px;
     }
-
-    .bubble ul {
-      margin: 6px 0 6px 20px;
-      padding: 0;
-    }
-    .bubble li {
-      margin-bottom: 4px;
-    }
     
     /* Force text color in chat bubbles */
     .user-bubble * {
@@ -773,15 +765,30 @@ AVATAR_USER = "https://i.imgur.com/1XK7Q9U.png"
 AVATAR_BOT = "https://i.imgur.com/3G4cK6X.png"
 
 # Display chat history
+import markdown
+
 for role, msg in st.session_state.chat:
     if role == "user":
         st.markdown(
-            f"<div class='chat-row user'>{avatar_html(AVATAR_USER,'U')}<div class='bubble user-bubble'>{msg}</div></div>",
+            f"""
+            <div class='chat-row user'>
+                {avatar_html(AVATAR_USER, 'U')}
+                <div class='bubble user-bubble'>{msg}</div>
+            </div>
+            """,
             unsafe_allow_html=True
         )
     else:
+        # แปลง Markdown → HTML
+        html_msg = markdown.markdown(msg)
+
         st.markdown(
-            f"<div class='chat-row bot'>{avatar_html(AVATAR_BOT,'B')}<div class='bubble bot-bubble'>{msg}</div></div>",
+            f"""
+            <div class='chat-row bot'>
+                {avatar_html(AVATAR_BOT, 'B')}
+                <div class='bubble bot-bubble'>{html_msg}</div>
+            </div>
+            """,
             unsafe_allow_html=True
         )
 
