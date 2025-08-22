@@ -279,9 +279,15 @@ def answer_from_profile(q: str) -> Optional[str]:
 def ask_gemini(question: str, contexts: List[str]) -> str:
     model = genai.GenerativeModel(MODEL_NAME)
     ctx = "\n\n---\n".join(contexts) if contexts else ""
+
+    # ✅ DEBUG: ดูว่าเราส่งอะไรให้โมเดลอ่าน
+    print("==== GEMINI CONTEXT BEGIN ====")
+    print(ctx[:2000])  # แสดงแค่ 2000 ตัวอักษรแรกพอ
+    print("==== GEMINI CONTEXT END ====")
+
     prompt = f"""
 คุณเป็นผู้ช่วยตอบคำถามจากเรซูเม่เท่านั้น
-ห้ามเดา ถ้าไม่พบในบริบทให้ตอบข้อมูลที่อ่านได้แบบสรุป
+ห้ามเดา ถ้าไม่พบในบริบทให้ตอบว่า "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
 ตอบภาษาไทยสั้น กระชับ
 
 [บริบทจากเรซูเม่]
@@ -296,6 +302,12 @@ def ask_gemini(question: str, contexts: List[str]) -> str:
     except Exception as e:
         print(f"[ask_gemini] error: {e}")
         return "ขออภัย ไม่พบข้อมูลนี้ในเรซูเม่ของฉัน"
+
+@app.get("/context")
+async def get_context():
+    await ensure_index()
+    # คืนตัวอย่าง 3 ชิ้นแรกให้ตรวจว่าอ่านชื่อ/ส่วนหัว ๆ มาไหม
+    return {"count": len(CHUNKS), "sample": CHUNKS[:3]}
 
 # ===================== Routes =====================
 @app.get("/")
