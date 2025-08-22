@@ -172,6 +172,31 @@ st.markdown(
         color: #ffffff !important;
     }
     
+    /* Specific fixes for footer and info text */
+    div[style*="text-align: center"] {
+        color: #ffffff !important;
+    }
+    
+    div[style*="text-align: center"] * {
+        color: #ffffff !important;
+    }
+    
+    /* Override any remaining dark text */
+    .stApp * {
+        color: inherit;
+    }
+    
+    .stApp p,
+    .stApp div,
+    .stApp span {
+        color: #ffffff !important;
+    }
+    
+    /* Ensure subheader is visible */
+    .stApp h3 {
+        color: #ffffff !important;
+    }
+    
     /* Remove default Streamlit background color from elements */
     div[data-testid="stVerticalBlock"] {
         background-color: transparent;
@@ -245,19 +270,27 @@ st.markdown(
         box-shadow: 0 2px 8px rgba(0,0,0,.25);
         word-wrap: break-word;
         white-space: pre-wrap;
-        color: #fff;
     }
     
     .user-bubble {
         background: linear-gradient(180deg,#0057ff,#1a73e8);
-        color: #fff;
+        color: #ffffff !important;
         border-bottom-right-radius: 6px;
     }
     
     .bot-bubble {
         background: #E4E6EB;
-        color: #111;
+        color: #111111 !important;
         border-bottom-left-radius: 6px;
+    }
+    
+    /* Force text color in chat bubbles */
+    .user-bubble * {
+        color: #ffffff !important;
+    }
+    
+    .bot-bubble * {
+        color: #111111 !important;
     }
     
     /* Sticky chat input */
@@ -724,7 +757,9 @@ with st.container():
 
 # ========================= Chatbot Section =========================
 st.divider()
-st.subheader("💬 Chat with my Profile")
+
+# Create subheader with forced white color
+st.markdown('<h3 style="color: #ffffff !important; margin-bottom: 1rem;">💬 Chat with my Profile</h3>', unsafe_allow_html=True)
 
 # Initialize session state
 if "chat" not in st.session_state:
@@ -799,9 +834,11 @@ if st.session_state.chat:
 # Footer with additional info
 st.markdown(
     """
-    <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040;">
-        <p style="color: #cccccc !important; font-size: 0.9rem;">
-            💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.<br>
+    <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040; color: #ffffff !important;">
+        <p style="color: #cccccc !important; font-size: 0.9rem; margin: 0;">
+            💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.
+        </p>
+        <p style="color: #cccccc !important; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
             Feel free to ask about specific achievements, technical expertise, or career background!
         </p>
     </div>
