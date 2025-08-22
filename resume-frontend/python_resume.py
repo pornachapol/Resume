@@ -255,7 +255,7 @@ st.markdown(
     
     /* Clear button styling */
     .stButton > button {
-        color: #ffffff !important;
+        color: #000000 !important;
         background-color: #f0f0f0 !important;
         border: 1px solid #cccccc !important;
     }
