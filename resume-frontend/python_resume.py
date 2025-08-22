@@ -707,11 +707,27 @@ with st.container():
     
     # แสดงประวัติ
     # แสดงประวัติการแชท (Messenger Style)
-    for role, msg in st.session_state.chat:
-        if role == "user":
-            st.markdown(f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>", unsafe_allow_html=True)
-        else:
-            st.markdown(f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}</div></div>", unsafe_allow_html=True)
+    for row in st.session_state.get("chat", []):
+    if isinstance(row, (list, tuple)):
+        role = row[0] if len(row) > 0 else "assistant"
+        msg  = row[1] if len(row) > 1 else ""
+        # ถ้ามี timestamp/sources ก็ใช้, ถ้าไม่มีก็ None
+        ts   = row[2] if len(row) > 2 else None
+        srcs = row[3] if len(row) > 3 else None
+    else:
+        role, msg, ts, srcs = "assistant", str(row), None, None
+
+    # วาดแบบ Messenger
+    if role == "user":
+        st.markdown(
+            f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.markdown(
+            f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}</div></div>",
+            unsafe_allow_html=True
+        )
 
     
     q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย…")
