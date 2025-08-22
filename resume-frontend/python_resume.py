@@ -19,6 +19,11 @@ st.markdown(
         background-color: #202020;
         color: #ffffff;
     }
+    .bubble {
+    color: #fff;              /* สีตัวอักษร */
+    font-size: 0.95rem;
+    line-height: 1.4;
+    }
     
     .main-header {
         padding: 2rem 0;
@@ -685,14 +690,7 @@ with st.container():
         if st.button("🧹 ล้างแชท"):
             st.session_state.chat = []
             st.rerun()
-    with cols[1]:
-        if st.button("🔎 ตรวจ Backend"):
-            try:
-                hr = requests.get(f"{BACKEND_URL}/health", timeout=15)
-                st.info(f"HEALTH => {hr.status_code} | {hr.text}")
-            except Exception as e:
-                st.error(f"เชื่อมต่อไม่ได้: {e}")
-    
+        
     # 3) แสดงประวัติแชท (รองรับ tuple 2 ช่องเก่า/4 ช่องใหม่)
     for row in st.session_state.get("chat", []):
         if isinstance(row, (list, tuple)):
@@ -707,16 +705,6 @@ with st.container():
         if role == "user":
             st.markdown(
                 f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>",
-                unsafe_allow_html=True
-            )
-        else:
-            # แปลง sources เป็นชิป (ถ้ามี)
-            src_html = ""
-            if srcs:
-                chips = "".join([f"<span class='src-chip'>{s}</span>" for s in srcs][:5])
-                src_html = f"<div style='margin-top:6px'>{chips}</div>"
-            st.markdown(
-                f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}{src_html}</div></div>",
                 unsafe_allow_html=True
             )
     
