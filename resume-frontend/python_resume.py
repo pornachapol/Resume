@@ -286,6 +286,31 @@ div[data-testid="stChatInput"] textarea {
 }
 </style>
 """, unsafe_allow_html=True)
+st.markdown("""
+<style>
+/* ปรับกล่องพิมพ์ไม่ให้ติดขอบล่าง */
+div[data-testid="stChatInput"] {
+    margin-bottom: 40px !important;  /* เว้นขึ้นจากขอบล่าง */
+    max-width: 900px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+/* ลดความสูงและให้สวย */
+div[data-testid="stChatInput"] textarea {
+    min-height: 36px !important;
+    font-size: 0.95rem !important;
+    padding: 6px 12px !important;
+    border-radius: 18px !important;
+}
+
+/* เพิ่ม margin ด้านล่างให้ข้อความสุดท้าย */
+.chat-row:last-child {
+    margin-bottom: 30px !important;
+}
+</style>
+""", unsafe_allow_html=True)
+
 
 # Header Section
 with st.container():
