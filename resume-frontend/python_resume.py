@@ -254,18 +254,20 @@ st.markdown(
     }
     
     /* Clear button styling */
-    .clear-btn .stButton > button {
+    div[data-testid="stButton"].clear-chat-btn > button {
       background-color: #ffffff;
       color: #202020 !important;
       padding: 0.6rem 1.2rem;
       border-radius: 6px;
       font-weight: 500;
-      display: inline-block;
       text-align: center;
       margin: 1rem 0;
       transition: background-color 0.3s ease;
       border: none;
       box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    }
+    div[data-testid="stButton"].clear-chat-btn > button:hover {
+      background-color: #e0e0e0;
     }
     .clear-btn .stButton > button:hover {
       background-color: #e0e0e0;
@@ -817,12 +819,10 @@ if user_input and user_input.strip():
 
 # Add a clear chat button
 if st.session_state.get("chat"):
-    # ห่อปุ่มใน div ที่มีคลาส clear-btn เพื่อให้ CSS เล็งถูกปุ่มนี้เท่านั้น
-    st.markdown('<div class="clear-btn">', unsafe_allow_html=True)
-    if st.button("🗑️ Clear Chat History", key="clear_chat"):
+    # ใช้ key และ class เพื่อให้สไตล์เจาะจงปุ่มนี้
+    if st.button("🗑️ Clear Chat History", key="clear_chat", help="Clear all chat messages"):
         st.session_state.chat = []
         st.rerun()
-    st.markdown('</div>', unsafe_allow_html=True)
     
 # Footer with additional info
 st.markdown(
