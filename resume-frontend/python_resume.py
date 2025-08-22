@@ -39,6 +39,14 @@ st.markdown(
         margin-bottom: 2rem;
     }
     
+    .bubble ul {
+      margin: 4px 0 4px 16px;   /* ลด margin บน-ล่าง */
+      padding-left: 16px;       /* ระยะเยื้อง */
+    }
+    .bubble li {
+      margin-bottom: 2px;       /* ลดระยะห่างระหว่าง bullet */
+      line-height: 1.4;         /* ความสูงบรรทัดกระชับ */
+    }
     .content-section {
         background-color: var(--color-panel);
         padding: 1.5rem 2rem;
