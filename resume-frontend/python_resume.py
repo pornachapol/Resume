@@ -2,6 +2,7 @@ import os
 import requests
 import streamlit as st
 from PIL import Image
+import time
 
 # Page configuration
 st.set_page_config(
@@ -11,7 +12,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom CSS styling
+# Custom CSS styling - consolidated and cleaned up
 st.markdown(
     """
     <style>
@@ -19,19 +20,8 @@ st.markdown(
         background-color: #202020;
         color: #ffffff;
     }
-    .bubble {
-    color: #fff;              /* สีตัวอักษร */
-    font-size: 0.95rem;
-    line-height: 1.4;
-    }
-    <style>
-    /* กันพลาด ถ้ามี src-chip โผล่ ให้ซ่อนไปเลย */
-    .src-chip { display: none !important; }
-    /* ให้ตัวหนังสือในบับเบิลอ่านง่าย */
-    .bubble { color: #fff; }
-    .bot-bubble { color: #111; } /* ถ้าพื้นสีเทาอ่อน */
-    </style>
     
+    /* Main sections styling */
     .main-header {
         padding: 2rem 0;
         background-color: #303030;
@@ -94,6 +84,8 @@ st.markdown(
         box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
         border-radius: 12px;
         width: 200px;
+        max-width: 100%;
+        height: auto;
     }
     
     .skill-tag {
@@ -129,6 +121,7 @@ st.markdown(
         font-size: 0.8rem;
         font-weight: 600;
     }
+    
     .output-badge {
         background-color: #78d88f;
         color: #202020;
@@ -163,154 +156,184 @@ st.markdown(
     div[data-testid="stVerticalBlock"] {
         background-color: transparent;
     }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-st.markdown(
-    """
-    <style>
-    /* Messenger Chat Bubble Style */
+    
+    /* Chat styling - consolidated */
     .chat-container {
         max-width: 600px;
         margin: auto;
     }
 
-    .bubble {
-        display: inline-block;
-        padding: 10px 14px;
-        margin: 8px;
-        border-radius: 18px;
-        font-size: 15px;
-        line-height: 1.4;
-        max-width: 80%;
-        word-wrap: break-word;
-    }
-
-    /* User message (ขวา) */
-    .user-bubble {
-        background-color: #0084FF;
-        color: white;
-        align-self: flex-end;
-        border-bottom-right-radius: 4px;
-    }
-
-    /* Bot message (ซ้าย) */
-    .bot-bubble {
-        background-color: #E4E6EB;
-        color: black;
-        align-self: flex-start;
-        border-bottom-left-radius: 4px;
-    }
-
     .chat-row {
         display: flex;
+        gap: 10px;
         align-items: flex-end;
+        margin: 10px 0;
     }
-
+    
     .chat-row.user {
         justify-content: flex-end;
     }
-
+    
     .chat-row.bot {
         justify-content: flex-start;
+    }
+
+    .chat-row .avatar {
+        width: 36px;
+        height: 36px;
+        border-radius: 50%;
+        background: #444;
+        flex: 0 0 36px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-weight: 700;
+        font-size: 14px;
+        box-shadow: 0 2px 6px rgba(0,0,0,.25);
+        overflow: hidden;
+    }
+    
+    .chat-row .avatar img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    
+    .chat-row.user .avatar {
+        order: 2;
+    }
+    
+    .chat-row.user .bubble {
+        order: 1;
+    }
+    
+    .chat-row.bot .avatar {
+        order: 1;
+    }
+    
+    .chat-row.bot .bubble {
+        order: 2;
+    }
+
+    .bubble {
+        max-width: 70vw;
+        padding: 12px 14px;
+        border-radius: 16px;
+        line-height: 1.45;
+        font-size: 0.95rem;
+        box-shadow: 0 2px 8px rgba(0,0,0,.25);
+        word-wrap: break-word;
+        white-space: pre-wrap;
+        color: #fff;
+    }
+    
+    .user-bubble {
+        background: linear-gradient(180deg,#0057ff,#1a73e8);
+        color: #fff;
+        border-bottom-right-radius: 6px;
+    }
+    
+    .bot-bubble {
+        background: #E4E6EB;
+        color: #111;
+        border-bottom-left-radius: 6px;
+    }
+    
+    /* Sticky chat input */
+    div[data-testid="stChatInput"] {
+        position: fixed;
+        left: 5%;
+        right: 5%;
+        bottom: 24px;
+        z-index: 999;
+        max-width: 900px;
+        margin-left: auto;
+        margin-right: auto;
+        margin-bottom: 40px !important;
+    }
+    
+    div[data-testid="stChatInput"] textarea {
+        min-height: 36px !important;
+        font-size: 0.95rem !important;
+        padding: 6px 12px !important;
+        border-radius: 18px !important;
+    }
+    
+    main .block-container {
+        padding-bottom: 120px;
+    }
+    
+    .chat-row:last-child {
+        margin-bottom: 30px !important;
+    }
+    
+    /* Hide source chips */
+    .src-chip {
+        display: none !important;
+    }
+    
+    /* Responsive design fixes */
+    @media (max-width: 768px) {
+        .profile-image {
+            width: 150px;
+        }
+        
+        .bubble {
+            max-width: 85vw;
+            font-size: 0.9rem;
+        }
+        
+        div[data-testid="stChatInput"] {
+            left: 2%;
+            right: 2%;
+        }
     }
     </style>
     """,
     unsafe_allow_html=True
 )
 
-# Messenger + Sticky input CSS  ✅ (แทนบล็อกเก่าทั้งหมด)
-st.markdown("""
-    <style>
-    /* --- Sticky chat input ล่างสุด --- */
-    div[data-testid="stChatInput"]{
-      position: fixed;
-      left: 5%;
-      right: 5%;
-      bottom: 24px;
-      z-index: 999;
-    }
-    main .block-container{ padding-bottom: 120px; }
-    
-    /* ===== Messenger-like Chat ===== */
-    .chat-row{
-      display:flex; gap:10px; align-items:flex-end; margin:10px 0;
-    }
-    .chat-row.user{ justify-content:flex-end; }
-    .chat-row.bot{ justify-content:flex-start; }
-    
-    /* Avatar */
-    .chat-row .avatar{
-      width:36px; height:36px; border-radius:50%; overflow:hidden; flex:0 0 36px;
-      box-shadow: 0 2px 6px rgba(0,0,0,.25);
-    }
-    .chat-row .avatar img{ width:100%; height:100%; object-fit:cover; }
-    
-    /* Bubbles */
-    .bubble{
-      max-width:70%;
-      padding:10px 14px;
-      border-radius:18px;
-      line-height:1.45;
-      box-shadow:0 1px 4px rgba(0,0,0,.2);
-      word-wrap:break-word;
-      white-space:pre-wrap;
-    }
-    .user-bubble{
-      background:#0084ff; color:#fff; border-bottom-right-radius:6px;
-    }
-    .bot-bubble{
-      background:#f1f0f0; color:#111; border-bottom-left-radius:6px;
-    }
-    
-    /* ซ่อนชิปแหล่งที่มา (ถ้ายังมี) */
-    .src-chip{ display:none !important; }
-    </style>
-    """, unsafe_allow_html=True)
-st.markdown("""
-<style>
-/* ปรับสไตล์กล่อง chat_input */
-div[data-testid="stChatInput"] {
-    margin-bottom: 0px !important;   /* เว้นจากขอบล่างขึ้นมา */
-    max-width: 900px;                 /* ให้กว้างพอดีเหมือน Messenger */
-    margin-left: auto;
-    margin-right: auto;
-}
+# Helper functions
+def get_backend_url():
+    """Get backend URL from environment or secrets with fallback"""
+    try:
+        # Try environment variable first
+        backend_url = os.getenv("BACKEND_URL")
+        if backend_url:
+            return backend_url
+        
+        # Try Streamlit secrets
+        if hasattr(st, 'secrets') and "BACKEND_URL" in st.secrets:
+            return st.secrets["BACKEND_URL"]
+        
+        # Fallback URL (you should replace this with your actual backend URL)
+        return "https://your-backend-url.com"
+    except Exception:
+        return "https://your-backend-url.com"
 
-div[data-testid="stChatInput"] textarea {
-    min-height: 36px !important;      /* ลดความสูง */
-    font-size: 0.95rem !important;    /* ปรับขนาดตัวอักษร */
-    padding: 6px 10px !important;     /* padding ข้างใน */
-    border-radius: 18px !important;   /* มนๆ แบบ Messenger */
-}
-</style>
-""", unsafe_allow_html=True)
-st.markdown("""
-<style>
-/* ปรับกล่องพิมพ์ไม่ให้ติดขอบล่าง */
-div[data-testid="stChatInput"] {
-    margin-bottom: 40px !important;  /* เว้นขึ้นจากขอบล่าง */
-    max-width: 900px;
-    margin-left: auto;
-    margin-right: auto;
-}
+def avatar_html(url=None, text_fallback="U"):
+    """Generate avatar HTML with error handling"""
+    if url and url.strip():
+        return f'<div class="avatar"><img src="{url}" alt="Avatar" onerror="this.style.display=\'none\'"/></div>'
+    return f'<div class="avatar">{text_fallback}</div>'
 
-/* ลดความสูงและให้สวย */
-div[data-testid="stChatInput"] textarea {
-    min-height: 36px !important;
-    font-size: 0.95rem !important;
-    padding: 6px 12px !important;
-    border-radius: 18px !important;
-}
-
-/* เพิ่ม margin ด้านล่างให้ข้อความสุดท้าย */
-.chat-row:last-child {
-    margin-bottom: 30px !important;
-}
-</style>
-""", unsafe_allow_html=True)
-
+def safe_request(url, data, timeout=30):
+    """Make HTTP request with proper error handling"""
+    try:
+        response = requests.post(url, json=data, timeout=timeout)
+        response.raise_for_status()  # Raises HTTPError for bad status codes
+        return response.json()
+    except requests.exceptions.Timeout:
+        return {"error": "Request timed out. Please try again."}
+    except requests.exceptions.ConnectionError:
+        return {"error": "Cannot connect to server. Please check your connection."}
+    except requests.exceptions.HTTPError as e:
+        return {"error": f"Server error: {e.response.status_code}"}
+    except requests.exceptions.RequestException:
+        return {"error": "An error occurred while processing your request."}
+    except Exception as e:
+        return {"error": f"Unexpected error: {str(e)}"}
 
 # Header Section
 with st.container():
@@ -319,15 +342,30 @@ with st.container():
     col1, col2 = st.columns([1, 3])
     
     with col1:
-        st.markdown(
-            """
-            <div style='display: flex; justify-content: center; padding: 1rem;'>
-                <img src='https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg' 
-                     class='profile-image'/>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
+        try:
+            st.markdown(
+                """
+                <div style='display: flex; justify-content: center; padding: 1rem;'>
+                    <img src='https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg' 
+                         class='profile-image' alt='Profile Picture' 
+                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSIxMDAiIGZpbGw9IiM0MDQwNDAiLz48dGV4dCB4PSIxMDAiIHk9IjEwNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjQ4IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5OPC90ZXh0Pjwvc3ZnPg=='; this.onerror=null;"/>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+        except Exception:
+            # Fallback if image fails
+            st.markdown(
+                """
+                <div style='display: flex; justify-content: center; padding: 1rem;'>
+                    <div style='width: 200px; height: 200px; background: #404040; border-radius: 12px; 
+                                display: flex; align-items: center; justify-content: center; font-size: 48px; color: #fff;'>
+                        N
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
     
     with col2:
         st.markdown("<h1 style='font-size: 2.5rem; margin-bottom: 0.5rem; color: #ffffff;'>Nachapol Roc-anusorn</h1>", unsafe_allow_html=True)
@@ -339,8 +377,8 @@ with st.container():
             st.markdown(
                 """
                 <div style='margin-top: 1rem;'>
-                    <p><i class="fas fa-map-marker-alt"></i> 📍 Bangkok, Thailand</p>
-                    <p><i class="fas fa-envelope"></i> 📧 <a href="mailto:r.nachapol@gmail.com">r.nachapol@gmail.com</a></p>
+                    <p>📍 Bangkok, Thailand</p>
+                    <p>📧 <a href="mailto:r.nachapol@gmail.com">r.nachapol@gmail.com</a></p>
                 </div>
                 """,
                 unsafe_allow_html=True
@@ -350,10 +388,10 @@ with st.container():
             st.markdown(
                 """
                 <div style='margin-top: 1rem;'>
-                    <p><i class="fas fa-phone"></i> 📞 064-687-7333</p>
+                    <p>📞 064-687-7333</p>
                     <p>
-                        <i class="fab fa-linkedin"></i> 🔗 <a href="https://www.linkedin.com/in/r-nachapol" target="_blank">LinkedIn</a> | 
-                        <i class="fab fa-github"></i> 💻 <a href="https://github.com/pornachapol" target="_blank">GitHub</a>
+                        🔗 <a href="https://www.linkedin.com/in/r-nachapol" target="_blank" rel="noopener noreferrer">LinkedIn</a> | 
+                        💻 <a href="https://github.com/pornachapol" target="_blank" rel="noopener noreferrer">GitHub</a>
                     </p>
                 </div>
                 """,
@@ -364,7 +402,7 @@ with st.container():
         resume_url = "https://github.com/pornachapol/Resume/raw/main/assets/Nachapol_Resume_2025.pdf"
         st.markdown(
             f"""
-            <a href="{resume_url}" class="download-button" target="_blank">
+            <a href="{resume_url}" class="download-button" target="_blank" rel="noopener noreferrer">
                 📥 Download Resume (PDF)
             </a>
             """,
@@ -397,66 +435,36 @@ with st.container():
         st.markdown("<h3 style='font-size: 1.2rem; margin-bottom: 1rem;'>Technical & Automation</h3>", unsafe_allow_html=True)
         
         technical_skills = [
-            "UiPath", 
-            "Excel VBA / Macro", 
-            "Power BI / SQL", 
-            "Power Query",
-            "ETL Development", 
-            "Power Automate", 
-            "JavaScript (basic)",
-            "Python (basic)",
-            "Jira"
+            "UiPath", "Excel VBA / Macro", "Power BI / SQL", "Power Query",
+            "ETL Development", "Power Automate", "JavaScript (basic)",
+            "Python (basic)", "Jira"
         ]
         
-        # Display skills as tags
-        html_skills = ""
-        for skill in technical_skills:
-            html_skills += f'<span class="skill-tag">{skill}</span>'
-        
+        html_skills = "".join(f'<span class="skill-tag">{skill}</span>' for skill in technical_skills)
         st.markdown(html_skills, unsafe_allow_html=True)
     
     with col2:
         st.markdown("<h3 style='font-size: 1.2rem; margin-bottom: 1rem;'>Business & Process</h3>", unsafe_allow_html=True)
         
         business_skills = [
-            "Lean Six Sigma", 
-            "SOP Standardization", 
-            "Project Management", 
-            "UAT Coordination",
-            "Supply Chain Analysis", 
-            "Inventory Management", 
-            "BRD Documentation",
-            "Process Optimization",
-            "Data Visualization"
+            "Lean Six Sigma", "SOP Standardization", "Project Management", "UAT Coordination",
+            "Supply Chain Analysis", "Inventory Management", "BRD Documentation",
+            "Process Optimization", "Data Visualization"
         ]
         
-        # Display skills as tags
-        html_skills = ""
-        for skill in business_skills:
-            html_skills += f'<span class="skill-tag">{skill}</span>'
-        
+        html_skills = "".join(f'<span class="skill-tag">{skill}</span>' for skill in business_skills)
         st.markdown(html_skills, unsafe_allow_html=True)
     
     with col3:
         st.markdown("<h3 style='font-size: 1.2rem; margin-bottom: 1rem;'>Leadership & Strategy</h3>", unsafe_allow_html=True)
         
         leadership_skills = [
-            "Team Management", 
-            "Change Management", 
-            "Performance Coaching", 
-            "Cross-functional Collaboration",
-            "Stakeholder Management", 
-            "Problem-Solving", 
-            "Communication",
-            "Time Management",
-            "Decision-Making"
+            "Team Management", "Change Management", "Performance Coaching", "Cross-functional Collaboration",
+            "Stakeholder Management", "Problem-Solving", "Communication",
+            "Time Management", "Decision-Making"
         ]
         
-        # Display skills as tags
-        html_skills = ""
-        for skill in leadership_skills:
-            html_skills += f'<span class="skill-tag">{skill}</span>'
-        
+        html_skills = "".join(f'<span class="skill-tag">{skill}</span>' for skill in leadership_skills)
         st.markdown(html_skills, unsafe_allow_html=True)
     
     st.markdown('</div>', unsafe_allow_html=True)
@@ -471,10 +479,10 @@ with st.container():
     st.markdown('<p class="job-period">Generali Life Assurance (Thailand) | Dec 2024 – Present | Bangkok</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • Manage operations for <span class="highlight">claim registration and data services</span> across credit and reimbursement claims\n
-        • Coordinate workload allocation, <span class="highlight">SLA monitoring</span>, and team performance management\n
-        • Collaborate with IT and business units to enhance system functionality and integration\n
-        • <span class="highlight">Lead UAT preparation and execution</span> for e-Claim system initiatives\n
+        • Manage operations for <span class="highlight">claim registration and data services</span> across credit and reimbursement claims<br>
+        • Coordinate workload allocation, <span class="highlight">SLA monitoring</span>, and team performance management<br>
+        • Collaborate with IT and business units to enhance system functionality and integration<br>
+        • <span class="highlight">Lead UAT preparation and execution</span> for e-Claim system initiatives<br>
         • Conduct requirement gathering and document business needs into BRDs
         """,
         unsafe_allow_html=True
@@ -487,9 +495,9 @@ with st.container():
     st.markdown('<p class="job-period">NGG Enterprise Co., Ltd | Apr 2022 – Nov 2024 | Bangkok</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • Lead <span class="highlight">digital transformation and business improvement projects</span> across departments\n
-        • Design <span class="highlight">dashboards and analytics pipelines</span> using Power BI and ETL tools\n
-        • Oversee end-to-end project delivery including feasibility, planning, and execution\n
+        • Lead <span class="highlight">digital transformation and business improvement projects</span> across departments<br>
+        • Design <span class="highlight">dashboards and analytics pipelines</span> using Power BI and ETL tools<br>
+        • Oversee end-to-end project delivery including feasibility, planning, and execution<br>
         • Optimize internal processes through collaboration with functional teams
         """,
         unsafe_allow_html=True
@@ -502,9 +510,9 @@ with st.container():
     st.markdown('<p class="job-period">Shinning Gold | Jul 2019 – Apr 2022 | Pathum Thani</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • Supervise production teams and enforce <span class="highlight">standardized operating procedures</span>\n
-        • Develop <span class="highlight">automation tools</span> using Excel Macro and JavaScript for planning and reporting\n
-        • Lead Lean-based improvement projects to reduce waste and improve efficiency\n
+        • Supervise production teams and enforce <span class="highlight">standardized operating procedures</span><br>
+        • Develop <span class="highlight">automation tools</span> using Excel Macro and JavaScript for planning and reporting<br>
+        • Lead Lean-based improvement projects to reduce waste and improve efficiency<br>
         • Align production capacity planning with business forecasts and operational targets
         """,
         unsafe_allow_html=True
@@ -517,9 +525,9 @@ with st.container():
     st.markdown('<p class="job-period">Siam Kubota Corporation | Jun 2017 – Jun 2019 | Chonburi</p>', unsafe_allow_html=True)
     st.markdown(
         """
-        • Implement <span class="highlight">automation solutions</span> including AGV for production line optimization\n
-        • Lead supply chain improvement initiatives including Set Box delivery system\n
-        • Conduct process analysis and layout redesign to support labor efficiency\n
+        • Implement <span class="highlight">automation solutions</span> including AGV for production line optimization<br>
+        • Lead supply chain improvement initiatives including Set Box delivery system<br>
+        • Conduct process analysis and layout redesign to support labor efficiency<br>
         • Participate in continuous improvement and quality control circle programs
         """,
         unsafe_allow_html=True
@@ -546,8 +554,8 @@ with st.container():
             </div>
             """,
             unsafe_allow_html=True
-            
         )
+        
     with col2:
         st.markdown(
             """
@@ -563,11 +571,8 @@ with st.container():
                 <p>Designed and implemented a real-time Sales Dashboard for executives using Power BI, AWS Cloud Storage, and Excel. Managed full-cycle data pipeline from cleansing to visualization using storytelling methodology and effective visual design principles.</p>
                 <p><span class="output-badge">OUTPUT</span> Reduced daily reporting by 1 hour and enabled real-time sales visibility.</p>
             </div>
-
-
             """,
             unsafe_allow_html=True
-            
         )
     
     with col3:
@@ -591,7 +596,6 @@ with st.container():
                 <p>Reduced manual workload by <span class="highlight">2 FTEs</span>, saving approximately 
                 ฿540,000/year through strategic automation of reporting and data processing.</p>
             </div>
-            
             """,
             unsafe_allow_html=True
         )
@@ -628,12 +632,7 @@ with st.container():
                 </p>
                 <p>Focus: Data Analytics, Process Improvement, and Business Strategy</p>
             </div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-        st.markdown(
-            """
+            
             <div>
                 <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Bachelor of Engineering in Industrial Engineering</h4>
                 <p style="color: #cccccc; font-style: italic; margin-top: 0;">
@@ -692,8 +691,8 @@ with st.container():
             <div>
                 <p style="margin-bottom: 0.5rem;"><strong>🔗 Social</strong></p>
                 <p>
-                    <a href="https://www.linkedin.com/in/r-nachapol" target="_blank">LinkedIn</a> | 
-                    <a href="https://github.com/pornachapol" target="_blank">GitHub</a>
+                    <a href="https://www.linkedin.com/in/r-nachapol" target="_blank" rel="noopener noreferrer">LinkedIn</a> | 
+                    <a href="https://github.com/pornachapol" target="_blank" rel="noopener noreferrer">GitHub</a>
                 </p>
             </div>
         </div>
@@ -703,74 +702,22 @@ with st.container():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-
-# ========================= Chatbot Section (Messenger) =========================
-import requests
-
+# ========================= Chatbot Section =========================
 st.divider()
 st.subheader("💬 Chat with my Profile")
 
-# URL backend (FastAPI on Render)
-BACKEND_URL = os.getenv("BACKEND_URL") or st.secrets.get("BACKEND_URL")
-
-# เก็บประวัติแชทใน session_state (list ของ tuple)
+# Initialize session state
 if "chat" not in st.session_state:
-    st.session_state.chat = []   # จะเก็บเป็น [("user","ข้อความ"), ("assistant","ข้อความ")]
+    st.session_state.chat = []
 
-# --------- Avatar config & helper ----------
+if "backend_url" not in st.session_state:
+    st.session_state.backend_url = get_backend_url()
+
+# Avatar configuration
 AVATAR_USER = "https://i.imgur.com/1XK7Q9U.png"
-AVATAR_BOT  = "https://i.imgur.com/3G4cK6X.png"
+AVATAR_BOT = "https://i.imgur.com/3G4cK6X.png"
 
-def avatar_html(url=None, text_fallback="U"):
-    if url:
-        return f"<img class='avatar' src='{url}'/>"
-    return f"<div class='avatar'>{text_fallback}</div>"
-
-# --------- CSS Messenger style ----------
-st.markdown("""
-<style>
-.chat-row{
-  display:flex; gap:10px; align-items:flex-end; margin:10px 0;
-}
-.chat-row.user{ justify-content:flex-end; }
-.chat-row.bot{ justify-content:flex-start; }
-
-.chat-row .avatar{
-  width:36px; height:36px; border-radius:50%;
-  background:#444; flex:0 0 36px;
-  display:flex; align-items:center; justify-content:center;
-  color:#fff; font-weight:700; font-size:14px;
-  box-shadow: 0 2px 6px rgba(0,0,0,.25);
-}
-.chat-row.user .avatar{ order:2; }   /* user → ขวา */
-.chat-row.user .bubble{ order:1; }
-.chat-row.bot  .avatar{ order:1; }   /* bot → ซ้าย */
-.chat-row.bot  .bubble{ order:2; }
-
-.bubble{
-  max-width: 70vw;
-  padding: 12px 14px;
-  border-radius: 16px;
-  line-height: 1.45;
-  font-size: .95rem;
-  box-shadow: 0 2px 8px rgba(0,0,0,.25);
-  word-wrap: break-word;
-  white-space: pre-wrap;
-}
-.user-bubble{
-  background: linear-gradient(180deg,#0057ff,#1a73e8);
-  color:#fff;
-  border-bottom-right-radius: 6px;
-}
-.bot-bubble{
-  background: #E4E6EB;
-  color:#111;
-  border-bottom-left-radius: 6px;
-}
-</style>
-""", unsafe_allow_html=True)
-
-# --------- แสดงประวัติการแชท ----------
+# Display chat history
 for role, msg in st.session_state.chat:
     if role == "user":
         st.markdown(
@@ -783,28 +730,70 @@ for role, msg in st.session_state.chat:
             unsafe_allow_html=True
         )
 
-# --------- กล่องพิมพ์ ----------
-q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย...")
-if q:
-    # 1) เก็บ/วาดฝั่งผู้ใช้
-    st.session_state.chat.append(("user", q))
+# Chat input
+user_input = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย...")
+
+if user_input and user_input.strip():
+    # Add user message to chat history
+    st.session_state.chat.append(("user", user_input))
+    
+    # Display user message immediately
     st.markdown(
-        f"<div class='chat-row user'>{avatar_html(AVATAR_USER,'U')}<div class='bubble user-bubble'>{q}</div></div>",
+        f"<div class='chat-row user'>{avatar_html(AVATAR_USER,'U')}<div class='bubble user-bubble'>{user_input}</div></div>",
         unsafe_allow_html=True
     )
 
-    # 2) ส่งไป Backend
-    ans_text = "❌ เชื่อมต่อระบบไม่ได้"
-    try:
-        r = requests.post(f"{BACKEND_URL}/chat", json={"message": q}, timeout=60)
-        data = r.json() if r.status_code == 200 else {}
-        ans_text = data.get("reply") or "ขออภัย ระบบไม่ตอบกลับ"
-    except Exception:
-        pass
-
-    # 3) เก็บ/วาดฝั่งบอท
-    st.session_state.chat.append(("assistant", ans_text))
+    # Show loading indicator
+    with st.spinner("กำลังตอบกลับ..."):
+        # Make request to backend
+        response_data = safe_request(
+            f"{st.session_state.backend_url}/chat",
+            {"message": user_input},
+            timeout=60
+        )
+        
+        # Process response
+        if "error" in response_data:
+            bot_response = f"❌ {response_data['error']}"
+        else:
+            bot_response = response_data.get("reply", "ขออภัย ระบบไม่สามารถตอบกลับได้ในขณะนี้")
+    
+    # Add bot response to chat history
+    st.session_state.chat.append(("assistant", bot_response))
+    
+    # Display bot response
     st.markdown(
-        f"<div class='chat-row bot'>{avatar_html(AVATAR_BOT,'B')}<div class='bubble bot-bubble'>{ans_text}</div></div>",
+        f"<div class='chat-row bot'>{avatar_html(AVATAR_BOT,'B')}<div class='bubble bot-bubble'>{bot_response}</div></div>",
         unsafe_allow_html=True
     )
+    
+    # Rerun to update the display
+    st.rerun()
+
+# Add a clear chat button
+if st.session_state.chat:
+    if st.button("🗑️ Clear Chat History", help="Clear all chat messages"):
+        st.session_state.chat = []
+        st.rerun()
+
+# Debug information (only show in development)
+if st.checkbox("Show Debug Info", value=False):
+    st.write("**Backend URL:**", st.session_state.backend_url)
+    st.write("**Chat History Length:**", len(st.session_state.chat))
+    if st.session_state.chat:
+        st.write("**Last Messages:**")
+        for role, msg in st.session_state.chat[-2:]:
+            st.write(f"- **{role}:** {msg[:100]}{'...' if len(msg) > 100 else ''}")
+
+# Footer with additional info
+st.markdown(
+    """
+    <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040;">
+        <p style="color: #cccccc; font-size: 0.9rem;">
+            💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.<br>
+            Feel free to ask about specific achievements, technical expertise, or career background!
+        </p>
+    </div>
+    """,
+    unsafe_allow_html=True
+)
