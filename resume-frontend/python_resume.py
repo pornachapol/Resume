@@ -659,87 +659,79 @@ with st.container():
     
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Chatbot Section
-    import requests
 
-    from datetime import datetime
-
-    USER_AVATAR = "https://i.imgur.com/1XK7Q9U.png"  # เปลี่ยนเป็นรูปคุณก็ได้
-    BOT_AVATAR  = "https://i.imgur.com/8Km9tLL.png"  # หรือไอคอนบอท
-    
-    def render_msg(role: str, text: str, sources=None, ts=None):
-        """
-        role: "user" | "assistant"
-        text: เนื้อหาข้อความ
-        sources: list[str] (ออปชัน) เพื่อแสดงแหล่งอ้างอิงเป็นชิปเล็ก ๆ
-        ts: timestamp string (ออปชัน)
-        """
-        cls = "user" if role=="user" else "bot"
-        ava = USER_AVATAR if role=="user" else BOT_AVATAR
-        if ts is None:
-            ts = datetime.now().strftime("%H:%M")
-        src_html = ""
-        if sources:
-            chips = "".join([f'<span class="src-chip">{s}</span>' for s in sources][:5])
-            src_html = f'<div style="margin-top:6px;">{chips}</div>'
-        st.markdown(f"""
-        <div class="chat-wrap">
-          <div class="msg-row {cls}">
-            {'<div class="avatar"><img src="'+ava+'" /></div>' if cls=='bot' else ''}
-            <div class="bubble">
-              {text}
-              {src_html}
-              <div class="meta">{ts}</div>
-            </div>
-            {'<div class="avatar"><img src="'+ava+'" /></div>' if cls=='user' else ''}
-          </div>
-        </div>
-        """, unsafe_allow_html=True)
-
+    # ========================= Chatbot Section (Messenger) =========================
     st.divider()
     st.subheader("💬 Chat with my Resume")
     
+    import requests
+    from datetime import datetime
+    
+    # 1) ตั้งค่า URL ของ Backend (FastAPI)
     BACKEND_URL = os.getenv("BACKEND_URL") or st.secrets.get("BACKEND_URL")
     
+    if not BACKEND_URL:
+        st.warning("⚠️ ยังไม่ตั้งค่า BACKEND_URL ใน Environment หรือ st.secrets")
+        st.stop()
+    
+    # 2) สถานะการสนทนาใน session_state
+    # เก็บเป็น tuple: (role, text, ts, sources)
     if "chat" not in st.session_state:
-        # เก็บ (role, text, ts, sources)
         st.session_state.chat = []
     
-    # แสดงประวัติ
-    # แสดงประวัติการแชท (Messenger Style)
-    # ================= Chat History Rendering =================
-# แสดงประวัติการแชท (รองรับทั้ง tuple 2 ช่อง หรือ 4 ช่อง)
-for row in st.session_state.get("chat", []):
-    if isinstance(row, (list, tuple)):
-        role = row[0] if len(row) > 0 else "assistant"
-        msg  = row[1] if len(row) > 1 else ""
-        ts   = row[2] if len(row) > 2 else None
-        srcs = row[3] if len(row) > 3 else None
-    else:
-        role, msg, ts, srcs = "assistant", str(row), None, None
-
-    # วาดแบบ Messenger
-    if role == "user":
-        st.markdown(
-            f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}</div></div>",
-            unsafe_allow_html=True
-        )
-
-
+    # ปุ่มล้างประวัติ (แก้ state พัง/ลูปเก่า)
+    cols = st.columns([1,1,6])
+    with cols[0]:
+        if st.button("🧹 ล้างแชท"):
+            st.session_state.chat = []
+            st.rerun()
+    with cols[1]:
+        if st.button("🔎 ตรวจ Backend"):
+            try:
+                hr = requests.get(f"{BACKEND_URL}/health", timeout=15)
+                st.info(f"HEALTH => {hr.status_code} | {hr.text}")
+            except Exception as e:
+                st.error(f"เชื่อมต่อไม่ได้: {e}")
     
+    # 3) แสดงประวัติแชท (รองรับ tuple 2 ช่องเก่า/4 ช่องใหม่)
+    for row in st.session_state.get("chat", []):
+        if isinstance(row, (list, tuple)):
+            role = row[0] if len(row) > 0 else "assistant"
+            msg  = row[1] if len(row) > 1 else ""
+            ts   = row[2] if len(row) > 2 else None
+            srcs = row[3] if len(row) > 3 else None
+        else:
+            role, msg, ts, srcs = "assistant", str(row), None, None
+    
+        # วาดแบบ Messenger
+        if role == "user":
+            st.markdown(
+                f"<div class='chat-row user'><div class='bubble user-bubble'>{msg}</div></div>",
+                unsafe_allow_html=True
+            )
+        else:
+            # แปลง sources เป็นชิป (ถ้ามี)
+            src_html = ""
+            if srcs:
+                chips = "".join([f"<span class='src-chip'>{s}</span>" for s in srcs][:5])
+                src_html = f"<div style='margin-top:6px'>{chips}</div>"
+            st.markdown(
+                f"<div class='chat-row bot'><div class='bubble bot-bubble'>{msg}{src_html}</div></div>",
+                unsafe_allow_html=True
+            )
+    
+    # 4) กล่องพิมพ์ (ถ้าไม่โชว์ แปลว่าบล็อกนี้ไม่ถูกรัน)
     q = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย…")
     if q:
-        # ผู้ใช้ส่งข้อความ
+        # ฝั่งผู้ใช้
         now = datetime.now().strftime("%H:%M")
         st.session_state.chat.append(("user", q, now, None))
-        render_msg("user", q, ts=now)
+        st.markdown(
+            f"<div class='chat-row user'><div class='bubble user-bubble'>{q}</div></div>",
+            unsafe_allow_html=True
+        )
     
-        # เรียก backend
+        # ยิงไป Backend
         ans_text = "❌ เชื่อมต่อ Backend ไม่ได้"
         sources = None
         try:
@@ -753,16 +745,16 @@ for row in st.session_state.get("chat", []):
         except Exception as e:
             ans_text = f"❌ เชื่อมต่อ Backend ไม่ได้\n\n`{e}`"
     
+        # ฝั่งบอท
         now2 = datetime.now().strftime("%H:%M")
         st.session_state.chat.append(("assistant", ans_text, now2, sources))
-        render_msg("assistant", ans_text, sources=sources, ts=now2)
-
-# Footer
-st.markdown(
-    """
-    <footer style="text-align: center; padding: 1rem; color: #cccccc; font-size: 0.8rem; margin-top: 2rem; border-top: 1px solid #404040;">
-        &copy; 2025 Nachapol Roc-anusorn | Last Updated: May 2025
-    </footer>
-    """,
-    unsafe_allow_html=True
-)
+        src_html = ""
+        if sources:
+            chips = "".join([f"<span class='src-chip'>{s}</span>" for s in sources])
+            src_html = f"<div style='margin-top:6px'>{chips}</div>"
+        st.markdown(
+            f"<div class='chat-row bot'><div class='bubble bot-bubble'>{ans_text}{src_html}</div></div>",
+            unsafe_allow_html=True
+        )
+    # ============================================================================== 
+    
