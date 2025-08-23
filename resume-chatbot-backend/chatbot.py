@@ -48,7 +48,8 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     reply: str
     sources: List[Tuple[int, str]] = []
-    opinion_enabled: bool = True  # เพิ่ม flag สำหรับ opinion mode
+    response_type: str = "mixed"  # factual, opinion, mixed
+    confidence: float = 0.0  # Confidence in factual information
 
 # ===================== Enhanced Data Structures =====================
 class ResumeChunk:
@@ -71,6 +72,94 @@ class ProfileData:
         self.education = []
         self.strengths = []
         self.achievements = []
+
+class QuestionClassifier:
+    """Classify questions to determine appropriate response strategy"""
+    
+    @staticmethod
+    def classify_question(question: str) -> Dict[str, Any]:
+        q_lower = question.lower()
+        
+        # Direct factual questions
+        factual_patterns = [
+            r'ชื่ออะไร|what.*name',
+            r'อีเมล|email',
+            r'เบอร์|โทร|phone',
+            r'ที่อยู่|location|address',
+            r'ประสบการณ์กี่ปี|years.*experience',
+            r'เรียนจบ|graduated|education',
+            r'ทำงานที่|work.*at|company'
+        ]
+        
+        # Opinion/analysis questions
+        opinion_patterns = [
+            r'เหมาะ|suitable|fit|match',
+            r'จุดแข็ง|จุดอ่อน|strength|weakness',
+            r'แนะนำ|recommend|suggest',
+            r'คิดว่า|think|opinion',
+            r'ประเมิน|evaluate|assess',
+            r'เปรียบเทียบ|compare',
+            r'ควร|should|would',
+            r'โอกาส|opportunity|potential'
+        ]
+        
+        # Skill/capability questions (semi-factual)
+        skill_patterns = [
+            r'ทักษะ|skill|ability|competent',
+            r'สามารถ|can|able',
+            r'มีประสบการณ์.*ใน|experience.*in',
+            r'เคยทำ|have.*done|worked.*on'
+        ]
+        
+        # Interview simulation questions
+        interview_patterns = [
+            r'ทำไม.*สนใจ|why.*interested',
+            r'motivat|แรงจูงใจ',
+            r'goal|เป้าหมาย',
+            r'expect.*salary|เงินเดือน.*คาด',
+            r'weakness|จุดอ่อน.*คุณ',
+            r'challenge|ความท้าทาย'
+        ]
+        
+        question_type = "factual"  # default
+        needs_opinion = False
+        interview_mode = False
+        confidence_threshold = 0.7
+        
+        for pattern in factual_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "factual"
+                confidence_threshold = 0.9
+                break
+                
+        for pattern in opinion_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "opinion"
+                needs_opinion = True
+                confidence_threshold = 0.5
+                break
+                
+        for pattern in skill_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "capability"
+                needs_opinion = True
+                confidence_threshold = 0.6
+                break
+                
+        for pattern in interview_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "interview"
+                needs_opinion = True
+                interview_mode = True
+                confidence_threshold = 0.3
+                break
+        
+        return {
+            "type": question_type,
+            "needs_opinion": needs_opinion,
+            "interview_mode": interview_mode,
+            "confidence_threshold": confidence_threshold
+        }
 
 # ===================== Global Variables =====================
 RESUME_CHUNKS: List[ResumeChunk] = []
@@ -179,46 +268,53 @@ def parse_structured_resume(text: str) -> Tuple[ProfileData, List[ResumeChunk]]:
         return profile, chunks
 
 # ===================== Enhanced Query Processing =====================
-def expand_query_for_context(query: str) -> List[str]:
-    """Expand query to catch more relevant context"""
+def expand_query_for_context(query: str, question_class: Dict) -> List[str]:
+    """Expand query based on question classification"""
     queries = [query]
     query_lower = query.lower()
     
-    # Job suitability queries
-    if any(word in query_lower for word in ['เหมาะ', 'suitable', 'fit', 'match']):
+    if question_class["type"] == "opinion":
+        # For opinion questions, get broader context
         if 'data' in query_lower:
             queries.extend([
-                'data analysis skills experience',
-                'SQL Python Power BI analytics',
-                'business analysis reporting'
+                'data analysis experience',
+                'SQL Python analytics',
+                'business intelligence reporting',
+                'statistical analysis'
             ])
         if 'project' in query_lower:
             queries.extend([
-                'project management experience',
-                'leadership team management',
-                'coordination stakeholder'
+                'project management',
+                'team leadership',
+                'stakeholder management'
+            ])
+        if 'management' in query_lower:
+            queries.extend([
+                'leadership experience',
+                'team management',
+                'people management'
             ])
     
-    # Skill-related queries
-    if any(word in query_lower for word in ['skills', 'ทักษะ', 'ability']):
+    elif question_class["type"] == "capability":
+        # For capability questions, focus on skills and experience
         queries.extend([
-            'technical automation tools',
-            'business process improvement',
-            'leadership management'
+            'technical skills experience',
+            'professional experience',
+            'achievements results'
         ])
     
-    # Experience queries
-    if any(word in query_lower for word in ['experience', 'ประสบการณ์', 'work']):
+    elif question_class["type"] == "interview":
+        # For interview questions, get personal insights
         queries.extend([
-            'professional experience achievements',
-            'manager supervisor role',
-            'projects implementation'
+            'goals objectives motivation',
+            'strengths achievements',
+            'challenges learning'
         ])
     
     return queries
 
-def multi_query_retrieval(query: str, k: int = 5) -> List[Tuple[int, str, float]]:
-    """Enhanced retrieval with query expansion"""
+def multi_query_retrieval(query: str, question_class: Dict, k: int = 5) -> List[Tuple[int, str, float]]:
+    """Enhanced retrieval with question-aware strategy"""
     if not RESUME_CHUNKS or not VECTORIZER:
         logger.warning("No resume chunks or vectorizer available")
         return []
@@ -226,7 +322,7 @@ def multi_query_retrieval(query: str, k: int = 5) -> List[Tuple[int, str, float]
     all_results = {}  # chunk_idx -> max_score
     
     try:
-        queries = expand_query_for_context(query)
+        queries = expand_query_for_context(query, question_class)
         
         for q in queries:
             # TF-IDF retrieval
@@ -241,19 +337,23 @@ def multi_query_retrieval(query: str, k: int = 5) -> List[Tuple[int, str, float]
                     qn = emb_q / (np.linalg.norm(emb_q, axis=1, keepdims=True) + 1e-12)
                     emb_scores = (EMB_MATRIX @ qn.T).ravel()
             
-            # Hybrid scoring with section weighting
+            # Question-type aware scoring
             for i, (tfidf_score, emb_score) in enumerate(zip(tfidf_scores, emb_scores)):
-                # Normalize scores
                 hybrid_score = 0.4 * tfidf_score + 0.6 * emb_score
                 
-                # Section-based boosting
                 section = RESUME_CHUNKS[i].section
-                if section in ['skills', 'experience', 'achievements']:
-                    hybrid_score *= 1.3
-                elif section in ['summary', 'strengths']:
-                    hybrid_score *= 1.1
                 
-                # Keep max score across all queries
+                # Boost scores based on question type
+                if question_class["type"] == "factual":
+                    if section in ['basic_info', 'education', 'experience']:
+                        hybrid_score *= 1.5
+                elif question_class["type"] == "opinion":
+                    if section in ['achievements', 'experience', 'skills']:
+                        hybrid_score *= 1.3
+                elif question_class["type"] == "interview":
+                    if section in ['goals', 'strengths', 'summary']:
+                        hybrid_score *= 1.4
+                
                 all_results[i] = max(all_results.get(i, 0), hybrid_score)
         
         # Sort and return top k
@@ -261,124 +361,180 @@ def multi_query_retrieval(query: str, k: int = 5) -> List[Tuple[int, str, float]
         
         results = []
         for idx, score in sorted_results[:k]:
-            if score > 0.01:  # Minimum threshold
+            if score > question_class["confidence_threshold"] * 0.1:
                 results.append((idx, RESUME_CHUNKS[idx].content, score))
         
-        logger.info(f"Retrieved {len(results)} relevant chunks for query: {query}")
+        logger.info(f"Retrieved {len(results)} relevant chunks for {question_class['type']} question")
         return results
         
     except Exception as e:
         logger.error(f"Error in multi_query_retrieval: {e}")
         return []
 
-# ===================== Enhanced Response Generation =====================
-def generate_enhanced_response(question: str, contexts: List[str], enable_opinion: bool = True) -> str:
-    """Generate response with opinion control and better error handling"""
+# ===================== Smart Response Generation =====================
+def generate_smart_response(question: str, contexts: List[str], question_class: Dict) -> Tuple[str, str]:
+    """Generate intelligent response based on question type and available context"""
     if not contexts:
-        return "❌ ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาระบุคำถามที่เฉพาะเจาะจงมากขึ้น"
+        return handle_no_context_response(question, question_class)
     
     try:
         model = genai.GenerativeModel(MODEL_NAME)
         
-        # Check if question requires analysis
-        analysis_keywords = ['เหมาะ', 'suitable', 'จุดแข็ง', 'จุดอ่อน', 'strengths', 'weaknesses', 
-                            'แนะนำ', 'recommend', 'ควร', 'should', 'เปรียบเทียบ', 'compare']
-        
-        needs_analysis = any(keyword in question.lower() for keyword in analysis_keywords)
-        
-        if needs_analysis and enable_opinion:
+        if question_class["type"] == "factual":
             prompt = f"""
-คุณเป็น AI ที่วิเคราะห์เรซูเม่อย่างชาญฉลาด
+คุณเป็น AI Assistant ที่ตอบคำถามจากเรซูเม่อย่างแม่นยำ
 
-**สำคัญ: คุณสามารถให้ความเห็นและคำแนะนำได้ตามที่ต้องการ**
+**หลักการตอบ:**
+- ตอบจากข้อเท็จจริงในเรซูเม่เป็นหลัก
+- หากไม่มีข้อมูลตรงตัว ให้บอกชัดเจนว่า "ไม่ระบุในเรซูเม่"
+- ตอบกระชับ ตรงประเด็น
 
-งานของคุณ:
-1. ตอบจากข้อเท็จจริงในเรซูเม่เป็นหลัก
-2. วิเคราะห์และให้ความเห็นที่อิงจากข้อมูลจริง
-3. แยกชัดเจนระหว่าง "ข้อเท็จจริง" และ "การวิเคราะห์"
-4. ให้คำแนะนำที่เป็นประโยชน์
-
-รูปแบบตอบ:
-📋 **จากข้อมูลในเรซูเม่:**
-[สรุปข้อเท็จจริงที่เกี่ยวข้อง]
-
-💡 **การวิเคราะห์และความเห็น:**
-[ความเห็นและข้อเสนอแนะที่อิงจากข้อเท็จจริงข้างต้น]
-
-**บริบทจากเรซูเม่:**
+**ข้อมูลจากเรซูเม่:**
 {chr(10).join(contexts)}
 
 **คำถาม:** {question}
 
-กรุณาตอบเป็นภาษาไทยที่อ่านเข้าใจง่าย และให้ความเห็นที่เป็นประโยชน์
+กรุณาตอบเป็นภาษาไทยที่ชัดเจน
 """
+            response_type = "factual"
+            
+        elif question_class["type"] == "opinion" or question_class["type"] == "capability":
+            prompt = f"""
+คุณเป็น AI Recruiter ที่วิเคราะห์เรซูเม่อย่างเชี่ยวชาญ
+
+**การตอบ:**
+1. แยกชัดเจนระหว่างข้อเท็จจริงและความเห็น
+2. ให้ความเห็นที่สมเหตุสมผลตามข้อมูลจริง
+3. ประเมินจุดแข็งและโอกาสพัฒนา
+
+**รูปแบบ:**
+📋 **ข้อเท็จจริงจากเรซูเม่:**
+[สรุปข้อมูลที่เกี่ยวข้อง]
+
+💡 **ความเห็นและการประเมิน:**
+[วิเคราะห์และคำแนะนำ]
+
+**ข้อมูลจากเรซูเม่:**
+{chr(10).join(contexts)}
+
+**คำถาม:** {question}
+
+ตอบเป็นภาษาไทยที่เข้าใจง่าย
+"""
+            response_type = "mixed"
+            
+        elif question_class["type"] == "interview":
+            prompt = f"""
+คุณกำลังจำลองการตอบคำถามสัมภาษณ์งานในนาม Nachapol
+
+**หลักการ:**
+- ตอบในบุคคลที่ 1 (ผม/ดิฉัน)
+- อ้างอิงข้อมูลจริงจากเรซูเม่
+- แสดงบุคลิกที่เหมาะสมกับตำแหน่งงาน
+- เพิ่มความน่าเชื่อถือด้วยตัวอย่างจริง
+
+**ข้อมูลจากเรซูเม่:**
+{chr(10).join(contexts)}
+
+**คำถามสัมภาษณ์:** {question}
+
+*หมายเหตุ: นี่คือการจำลองคำตอบตามข้อมูลในเรซูเม่*
+
+ตอบในลักษณะผู้สมัครงานที่มั่นใจและมืออาชีพ
+"""
+            response_type = "interview_simulation"
+            
         else:
+            # Default mixed response
             prompt = f"""
-คุณเป็นผู้ช่วยที่ตอบคำถามจากเรซูเม่
+คุณเป็น AI Assistant ที่ช่วยตอบคำถามเกี่ยวกับเรซูเม่
 
-งานของคุณ:
-- ตอบจากข้อมูลในเรซูเม่เป็นหลัก
-- หากไม่มีข้อมูลตรงตัว ให้บอกว่า "ไม่ระบุในเรซูเม่"
-- ตอบกระชับ ชัดเจน
-
-**บริบทจากเรซูเม่:**
+**ข้อมูลจากเรซูเม่:**
 {chr(10).join(contexts)}
 
 **คำถาม:** {question}
 
-กรุณาตอบเป็นภาษาไทย
+ตอบอย่างเป็นธรรมชาติและเป็นประโยชน์
 """
+            response_type = "mixed"
         
-        # Generate with safety settings for opinion
+        # Generate response
         generation_config = genai.types.GenerationConfig(
-            temperature=0.7 if enable_opinion else 0.3,
+            temperature=0.3 if question_class["type"] == "factual" else 0.7,
             top_p=0.8,
             top_k=40,
             max_output_tokens=2048,
         )
         
-        response = model.generate_content(
-            prompt,
-            generation_config=generation_config
-        )
-        
+        response = model.generate_content(prompt, generation_config=generation_config)
         answer = (getattr(response, "text", "") or "").strip()
         
         if not answer:
-            return "❌ ไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่"
+            return "❌ ไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่", response_type
             
-        logger.info(f"Generated response for question: {question[:50]}...")
-        return answer
+        return answer, response_type
         
     except Exception as e:
-        logger.error(f"Error in generate_enhanced_response: {e}")
-        return "❌ เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่หรือติดต่อผู้ดูแลระบบ"
+        logger.error(f"Error in generate_smart_response: {e}")
+        return "❌ เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่", "error"
+
+def handle_no_context_response(question: str, question_class: Dict) -> Tuple[str, str]:
+    """Handle cases where no relevant context is found"""
+    
+    if question_class["type"] == "factual":
+        return "ขออภัย ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาลองถามในรูปแบบอื่น", "no_context"
+    
+    elif question_class["type"] == "interview":
+        # Try to give a general interview-style response
+        model = genai.GenerativeModel(MODEL_NAME)
+        prompt = f"""
+คุณกำลังตอบคำถามสัมภาษณ์ในฐานะผู้สมัครงาน แต่คำถามนี้ไม่มีข้อมูลเฉพาะในเรซูเม่
+
+ให้ตอบเป็นคำตอบทั่วไปที่เหมาะสมสำหรับผู้สมัครงาน พร้อมระบุว่าเป็นคำตอบทั่วไป
+
+**คำถาม:** {question}
+
+*หมายเหตุ: คำตอบนี้เป็นการจำลองทั่วไป ไม่ใช่ข้อมูลเฉพาะจากเรซูเม่*
+"""
+        try:
+            response = model.generate_content(prompt)
+            answer = getattr(response, "text", "").strip()
+            return answer or "ขออภัย ไม่สามารถตอบคำถามนี้ได้", "general_interview"
+        except:
+            return "ขออภัย คำถามนี้ต้องการข้อมูลเฉพาะที่ไม่มีในเรซูเม่", "no_context"
+    
+    else:
+        return "ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาลองถามในรูปแบบอื่น หรือถามคำถามที่เฉพาะเจาะจงมากขึ้น", "no_context"
 
 # ===================== Profile-based Quick Answers =====================
-def get_quick_answer(question: str) -> Optional[str]:
-    """Quick answers for basic profile questions"""
+def get_quick_answer(question: str) -> Optional[Tuple[str, str]]:
+    """Quick answers for basic profile questions with response type"""
     try:
         q_lower = question.lower().replace(" ", "")
         
         # Name questions
         if any(k in q_lower for k in ["ชื่ออะไร", "ชื่อคืออะไร", "name", "fullname"]):
             if "thai" in q_lower or "ไทย" in q_lower:
-                return f"ชื่อภาษาไทย: {PROFILE.name_th}" if PROFILE.name_th else None
+                if PROFILE.name_th:
+                    return f"ชื่อภาษาไทย: {PROFILE.name_th}", "factual"
             elif PROFILE.name_en:
                 result = f"ชื่อ: {PROFILE.name_en}"
                 if PROFILE.name_th:
                     result += f" (ภาษาไทย: {PROFILE.name_th})"
-                return result
+                return result, "factual"
         
         # Contact info
         if "email" in q_lower or "อีเมล" in q_lower:
-            return f"อีเมล: {PROFILE.email}" if PROFILE.email else None
+            if PROFILE.email:
+                return f"อีเมล: {PROFILE.email}", "factual"
             
         if "phone" in q_lower or "โทร" in q_lower:
-            return f"เบอร์โทร: {PROFILE.phone}" if PROFILE.phone else None
+            if PROFILE.phone:
+                return f"เบอร์โทร: {PROFILE.phone}", "factual"
             
         if "location" in q_lower or "ที่อยู่" in q_lower:
-            return f"ที่ตั้ง: {PROFILE.location}" if PROFILE.location else None
+            if PROFILE.location:
+                return f"ที่ตั้ง: {PROFILE.location}", "factual"
         
         return None
         
@@ -413,6 +569,30 @@ def embed_texts(texts: List[str]) -> np.ndarray:
     except Exception as e:
         logger.error(f"Error in embed_texts: {e}")
         return np.zeros((len(texts), 1), dtype="float32")
+
+def calculate_response_confidence(contexts: List[str], question: str, question_class: Dict) -> float:
+    """Calculate confidence score for the response"""
+    if not contexts:
+        return 0.0
+    
+    # Base confidence from context quality
+    context_length = sum(len(c.split()) for c in contexts)
+    base_confidence = min(context_length / 100, 1.0)  # Normalize by expected context length
+    
+    # Adjust by question type
+    if question_class["type"] == "factual":
+        # Factual questions need precise information
+        confidence_multiplier = 1.0
+    elif question_class["type"] == "opinion":
+        # Opinion questions are inherently less certain
+        confidence_multiplier = 0.7
+    elif question_class["type"] == "interview":
+        # Interview simulations are moderate confidence
+        confidence_multiplier = 0.8
+    else:
+        confidence_multiplier = 0.6
+    
+    return base_confidence * confidence_multiplier
 
 async def fetch_resume_text() -> str:
     """Fetch resume content from URL with better error handling"""
@@ -500,7 +680,7 @@ def home():
         "service": "enhanced-resume-chatbot", 
         "status": "ready",
         "version": "2.0.0",
-        "opinion_enabled": True
+        "features": ["intelligent_classification", "interview_simulation", "confidence_scoring"]
     }
 
 @app.get("/health")
@@ -512,7 +692,8 @@ async def health():
             "chunks": len(RESUME_CHUNKS),
             "profile_loaded": bool(PROFILE.name_en or PROFILE.name_th),
             "vectorizer_ready": VECTORIZER is not None,
-            "embeddings_ready": EMB_MATRIX is not None
+            "embeddings_ready": EMB_MATRIX is not None,
+            "ai_ready": bool(GOOGLE_API_KEY)
         }
     except Exception as e:
         logger.error(f"Health check failed: {e}")
@@ -532,7 +713,7 @@ async def debug():
                 "skills_count": len(PROFILE.skills)
             },
             "last_fetch": LAST_FETCH_AT,
-            "opinion_enabled": True
+            "intelligent_features": True
         }
     except Exception as e:
         logger.error(f"Debug endpoint failed: {e}")
@@ -559,32 +740,51 @@ async def chat(req: ChatRequest):
         question = (req.message or "").strip()
         if not question:
             return ChatResponse(
-                reply="👋 สวัสดีครับ! สามารถถามคำถามเกี่ยวกับเรซูเม่ได้เลย\n\nตัวอย่าง:\n• ชื่ออะไร?\n• มีทักษะอะไรบ้าง?\n• เหมาะกับตำแหน่ง Data Analyst ไหม?\n• สรุปเรซูเม่ให้หน่อย",
+                reply="👋 สวัสดีครับ! ผมคือ AI Assistant ที่จะช่วยตอบคำถามเกี่ยวกับเรซูเม่ของคุณ Nachapol\n\n🔍 **ตัวอย่างคำถาม:**\n• ข้อมูลพื้นฐาน: ชื่ออะไร? อีเมลคืออะไร?\n• ทักษะและความสามารถ: มีทักษะอะไรบ้าง?\n• การประเมิน: เหมาะกับตำแหน่ง Data Analyst ไหม?\n• สัมภาษณ์งาน: ทำไมสนใจตำแหน่งนี้?\n\n💡 ระบบจะแยกแยะระหว่างข้อเท็จจริงในเรซูเม่กับความเห็นส่วนตัวให้ชัดเจน",
                 sources=[],
-                opinion_enabled=True
+                response_type="greeting",
+                confidence=1.0
             )
         
-        # Try quick answer first
-        quick = get_quick_answer(question)
-        if quick:
-            return ChatResponse(
-                reply=quick, 
-                sources=[],
-                opinion_enabled=True
-            )
+        # Classify the question
+        question_class = QuestionClassifier.classify_question(question)
+        
+        # Try quick answer first for factual questions
+        if question_class["type"] == "factual":
+            quick = get_quick_answer(question)
+            if quick:
+                return ChatResponse(
+                    reply=quick[0], 
+                    sources=[],
+                    response_type=quick[1],
+                    confidence=0.95
+                )
         
         # Retrieve relevant contexts
-        hits = multi_query_retrieval(question, k=5)
-        contexts = [hit[1] for hit in hits[:3]]
-        sources = [(hit[0], hit[1][:150] + "..." if len(hit[1]) > 150 else hit[1]) for hit in hits[:3]]
+        hits = multi_query_retrieval(question, question_class, k=6)
+        contexts = [hit[1] for hit in hits[:4]]  # Use top 4 for better context
+        sources = [(hit[0], hit[1][:200] + "..." if len(hit[1]) > 200 else hit[1]) for hit in hits[:3]]
         
-        # Generate response with opinion enabled
-        reply = generate_enhanced_response(question, contexts, enable_opinion=True)
+        # Calculate confidence
+        confidence = calculate_response_confidence(contexts, question, question_class)
+        
+        # Generate intelligent response
+        reply, response_type = generate_smart_response(question, contexts, question_class)
+        
+        # Add metadata for transparency
+        if response_type in ["mixed", "interview_simulation"]:
+            if not any(indicator in reply.lower() for indicator in ["📋", "💡", "หมายเหตุ"]):
+                # Add transparency note if not already included
+                if response_type == "interview_simulation":
+                    reply += "\n\n*หมายเหตุ: คำตอบนี้เป็นการจำลองการสัมภาษณ์ตามข้อมูลในเรซูเม่*"
+                elif confidence < 0.6:
+                    reply += "\n\n*หมายเหตุ: คำตอบบางส่วนอาจเป็นการวิเคราะห์จากข้อมูลที่มีอยู่*"
         
         return ChatResponse(
             reply=reply, 
             sources=sources,
-            opinion_enabled=True
+            response_type=response_type,
+            confidence=confidence
         )
         
     except Exception as e:
@@ -592,7 +792,8 @@ async def chat(req: ChatRequest):
         return ChatResponse(
             reply=f"❌ เกิดข้อผิดพลาดในระบบ: {str(e)}\n\nกรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ",
             sources=[],
-            opinion_enabled=True
+            response_type="error",
+            confidence=0.0
         )
 
 # ===================== Additional API Endpoints =====================
@@ -624,9 +825,11 @@ async def search_resume(query: str):
     """Search in resume content"""
     try:
         await ensure_data_loaded()
-        hits = multi_query_retrieval(query, k=5)
+        question_class = QuestionClassifier.classify_question(query)
+        hits = multi_query_retrieval(query, question_class, k=5)
         return {
             "query": query,
+            "question_type": question_class["type"],
             "results": [
                 {
                     "chunk_id": chunk_idx,
@@ -641,29 +844,168 @@ async def search_resume(query: str):
         logger.error(f"Search endpoint failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-# Add a test endpoint to verify opinion functionality
-@app.post("/test-opinion")
-async def test_opinion():
-    """Test endpoint to verify opinion functionality"""
+@app.post("/analyze-question")
+async def analyze_question(req: ChatRequest):
+    """Analyze question type and strategy"""
+    try:
+        question_class = QuestionClassifier.classify_question(req.message)
+        
+        return {
+            "question": req.message,
+            "classification": question_class,
+            "strategy": {
+                "response_approach": question_class["type"],
+                "needs_opinion": question_class["needs_opinion"],
+                "interview_mode": question_class["interview_mode"],
+                "confidence_threshold": question_class["confidence_threshold"]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Question analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/simulate-interview")
+async def simulate_interview():
+    """Get common interview questions for testing"""
     try:
         await ensure_data_loaded()
         
-        test_question = "คุณ Nachapol เหมาะกับตำแหน่ง Data Analyst ไหม"
-        hits = multi_query_retrieval(test_question, k=3)
-        contexts = [hit[1] for hit in hits[:3]]
+        interview_questions = [
+            "ทำไมถึงสนใจตำแหน่งนี้?",
+            "จุดแข็งและจุดอ่อนของคุณคืออะไร?",
+            "เป้าหมายในอนาคตคืออะไร?",
+            "ท่านคาดหวังเงินเดือนเท่าไหร่?",
+            "มีประสบการณ์ที่ท้าทายที่สุดคืออะไร?",
+            "ทำไมถึงอยากเปลี่ยนงาน?",
+            "คุณจะจัดการกับแรงกดดันในการทำงานอย่างไร?",
+            "มีคำถามอะไรที่อยากถามเกี่ยวกับบริษัทบ้างไหม?"
+        ]
         
-        response_with_opinion = generate_enhanced_response(test_question, contexts, enable_opinion=True)
-        response_without_opinion = generate_enhanced_response(test_question, contexts, enable_opinion=False)
+        # Generate sample responses for a few questions
+        sample_responses = {}
+        for q in interview_questions[:3]:
+            question_class = QuestionClassifier.classify_question(q)
+            hits = multi_query_retrieval(q, question_class, k=3)
+            contexts = [hit[1] for hit in hits]
+            
+            if contexts:
+                reply, _ = generate_smart_response(q, contexts, question_class)
+                sample_responses[q] = reply
         
         return {
-            "test_question": test_question,
-            "with_opinion": response_with_opinion,
-            "without_opinion": response_without_opinion,
-            "opinion_enabled": True,
-            "contexts_found": len(contexts)
+            "interview_questions": interview_questions,
+            "sample_responses": sample_responses,
+            "note": "ใช้ /chat endpoint เพื่อทดสอบคำถามสัมภาษณ์"
         }
+        
     except Exception as e:
-        logger.error(f"Test opinion endpoint failed: {e}")
+        logger.error(f"Interview simulation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/capabilities")
+async def get_capabilities():
+    """Get chatbot capabilities and features"""
+    return {
+        "question_types": {
+            "factual": {
+                "description": "คำถามเกี่ยวกับข้อเท็จจริงในเรซูเม่",
+                "examples": ["ชื่ออะไร?", "อีเมลคืออะไร?", "เรียนจบจากไหน?"],
+                "response_style": "ตรงไปตรงมา อิงจากข้อมูลจริง"
+            },
+            "opinion": {
+                "description": "คำถามที่ต้องการการวิเคราะห์และความเห็น",
+                "examples": ["เหมาะกับตำแหน่ง Data Analyst ไหม?", "จุดแข็งคืออะไร?"],
+                "response_style": "แยกข้อเท็จจริงและความเห็นชัดเจน"
+            },
+            "capability": {
+                "description": "คำถามเกี่ยวกับทักษะและความสามารถ",
+                "examples": ["มีทักษะอะไรบ้าง?", "สามารถทำงานด้าน AI ได้ไหม?"],
+                "response_style": "อิงจากข้อมูลทักษะและประสบการณ์"
+            },
+            "interview": {
+                "description": "จำลองการสัมภาษณ์งาน",
+                "examples": ["ทำไมสนใจตำแหน่งนี้?", "เป้าหมายคืออะไร?"],
+                "response_style": "ตอบในฐานะผู้สมัครงาน"
+            }
+        },
+        "features": [
+            "อัตโนมัติจำแนกประเภทคำถาม",
+            "แยกข้อเท็จจริงและความเห็น",
+            "จำลองการสัมภาษณ์งาน",
+            "คำนวณค่าความเชื่อมั่นในคำตอบ",
+            "ค้นหาบริบทที่เกี่ยวข้องอัจฉริยะ"
+        ],
+        "transparency": {
+            "factual_responses": "อิงจากข้อมูลในเรซูเม่เท่านั้น",
+            "opinion_responses": "ระบุชัดเจนส่วนที่เป็นการวิเคราะห์",
+            "interview_simulation": "แจ้งเตือนว่าเป็นการจำลอง",
+            "confidence_scoring": "ให้คะแนนความเชื่อมั่นในคำตอบ"
+        }
+    }
+
+# ===================== Testing and Validation =====================
+@app.post("/test-intelligence")
+async def test_intelligence():
+    """Test the intelligent response system"""
+    try:
+        await ensure_data_loaded()
+        
+        test_cases = [
+            {
+                "question": "ชื่ออะไร?",
+                "expected_type": "factual",
+                "expected_confidence": "high"
+            },
+            {
+                "question": "เหมาะกับตำแหน่ง Data Scientist ไหม?",
+                "expected_type": "opinion",
+                "expected_confidence": "medium"
+            },
+            {
+                "question": "ทำไมถึงสนใจตำแหน่งนี้?",
+                "expected_type": "interview",
+                "expected_confidence": "low-medium"
+            },
+            {
+                "question": "มีทักษะด้าน Machine Learning ไหม?",
+                "expected_type": "capability",
+                "expected_confidence": "medium"
+            }
+        ]
+        
+        results = []
+        for test in test_cases:
+            question_class = QuestionClassifier.classify_question(test["question"])
+            hits = multi_query_retrieval(test["question"], question_class, k=3)
+            contexts = [hit[1] for hit in hits]
+            confidence = calculate_response_confidence(contexts, test["question"], question_class)
+            
+            if contexts:
+                reply, response_type = generate_smart_response(test["question"], contexts, question_class)
+            else:
+                reply, response_type = handle_no_context_response(test["question"], question_class)
+            
+            results.append({
+                "question": test["question"],
+                "expected_type": test["expected_type"],
+                "actual_type": question_class["type"],
+                "type_match": question_class["type"] == test["expected_type"],
+                "confidence": confidence,
+                "contexts_found": len(contexts),
+                "response_preview": reply[:100] + "..." if len(reply) > 100 else reply
+            })
+        
+        return {
+            "test_results": results,
+            "summary": {
+                "total_tests": len(test_cases),
+                "type_accuracy": sum(1 for r in results if r["type_match"]) / len(results),
+                "avg_confidence": sum(r["confidence"] for r in results) / len(results)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Intelligence test failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
