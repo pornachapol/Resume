@@ -771,8 +771,8 @@ if "backend_url" not in st.session_state:
     st.session_state.backend_url = get_backend_url()
 
 # Avatar configuration
-AVATAR_USER = "https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg"
-AVATAR_BOT = "https://i.imgur.com/3G4cK6X.png"
+AVATAR_USER = "https://cdn-icons-png.flaticon.com/512/3160/3160743.png"
+AVATAR_BOT = "https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg"
 
 # Display chat history
 import markdown
