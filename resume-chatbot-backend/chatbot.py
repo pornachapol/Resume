@@ -1,826 +1,1013 @@
-import os
-import requests
-import streamlit as st
-from PIL import Image
-import time
+import os, re, time, io
+from typing import List, Tuple, Optional, Dict, Any
+import httpx
+from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from bs4 import BeautifulSoup
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
+import google.generativeai as genai
+import fitz  # PyMuPDF
+import numpy as np
+import logging
 
-# Page configuration
-st.set_page_config(
-    page_title="Nachapol Roc-anusorn | Resume",
-    page_icon="📄",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Setup logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-# Custom CSS styling - consolidated and cleaned up
-st.markdown(
-    """
-    <style>
-    .stApp {
-        /* Theme variables */
-        --color-bg: #202020;
-        --color-panel: #303030;
-        --color-text: #ffffff;
-        --color-muted: #cccccc;
-        --color-accent: #4cb5f9;
-        --color-accent-2: #78d88f;
-        --color-border: #505050;
-        --color-chip: #404040;
-        background-color: var(--color-bg);
-        color: var(--color-text);
-    }
-    
-    /* Main sections styling */
-    .main-header {
-        padding: 2rem 0;
-        background-color: #303030;
-        border-radius: 12px;
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-        margin-bottom: 2rem;
-    }
-    
-    .content-section {
-        background-color: var(--color-panel);
-        padding: 1.5rem 2rem;
-        border-radius: 12px;
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
-        margin-bottom: 1.5rem;
-        color: var(--color-text);
-    }
-    
-    .section-title {
-        color: var(--color-text);
-        font-size: 1.8rem;
-        font-weight: 600;
-        margin-bottom: 1.2rem;
-        padding-bottom: 0.6rem;
-        border-bottom: 2px solid var(--color-border);
-    }
-    
-    .job-title {
-        color: var(--color-text);
-        font-size: 1.3rem;
-        font-weight: 600;
-        margin-bottom: 0.2rem;
-    }
-    
-    .job-period {
-        color: var(--color-muted);
-        font-size: 0.9rem;
-        font-style: italic;
-        margin-bottom: 0.8rem;
-    }
-    
-    .download-button {
-        background-color: #ffffff;
-        color: #202020 !important;
-        padding: 0.6rem 1.2rem;
-        text-decoration: none;
-        border-radius: 6px;
-        font-weight: 500;
-        display: inline-block;
-        text-align: center;
-        margin: 1rem 0;
-        transition: background-color 0.3s;
-    }
-    
-    .download-button:hover {
-        background-color: #e0e0e0;
-    }
-    
-    .profile-image {
-        border: 3px solid var(--color-chip);
-        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
-        border-radius: 12px;
-        width: 200px;
-        max-width: 100%;
-        height: auto;
-    }
-    
-    .skill-tag {
-        background-color: var(--color-chip);
-        color: var(--color-text);
-        border-radius: 20px;
-        padding: 5px 12px;
-        margin-right: 8px;
-        margin-bottom: 8px;
-        display: inline-block;
-        font-size: 0.85rem;
-    }
-    
-    .project-card {
-        background-color: var(--color-chip);
-        border-radius: 8px;
-        padding: 1rem;
-        margin-bottom: 1rem;
-        border-left: 4px solid var(--color-accent);
-    }
-    
-    .highlight {
-        color: var(--color-accent);
-        font-weight: 500;
-    }
-    
-    .award-badge {
-        background-color: var(--color-accent);
-        color: #202020;
-        border-radius: 4px;
-        padding: 3px 8px;
-        margin-right: 8px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-    
-    .output-badge {
-        background-color: var(--color-accent-2);
-        color: #202020;
-        border-radius: 4px;
-        padding: 3px 8px;
-        margin-right: 8px;
-        font-size: 0.8rem;
-        font-weight: 600;
-    }
-    
-    /* Base text and link styles */
-    .stApp, .stApp p, .stApp li, .stApp div, .stApp span {
-        color: var(--color-text);
-    }
-    a {
-        color: var(--color-accent) !important;
-        text-decoration: none;
-    }
-    
-    a:hover {
-        text-decoration: underline;
-    }
-    
-    /* Streamlit markdown/text blocks */
-    .stMarkdown, .stText { color: var(--color-text); }
-    
-    /* Remove default Streamlit background color from elements */
-    div[data-testid="stVerticalBlock"] {
-        background-color: transparent;
-    }
-    
-    /* Chat styling - consolidated */
-    .chat-container {
-        max-width: 600px;
-        margin: auto;
-    }
+# ===================== ENV =====================
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
+RESUME_URL = os.getenv("RESUME_URL")
+ALLOWED_ORIGINS = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS", "")).split(",") if o.strip()]
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
 
-    .chat-row {
-        display: flex;
-        gap: 10px;
-        align-items: flex-end;
-        margin: 10px 0;
-    }
-    
-    .chat-row.user {
-        justify-content: flex-end;
-    }
-    
-    .chat-row.bot {
-        justify-content: flex-start;
-    }
-
-    .chat-row .avatar {
-        width: 36px;
-        height: 36px;
-        border-radius: 50%;
-        background: #444;
-        flex: 0 0 36px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: #fff;
-        font-weight: 700;
-        font-size: 14px;
-        box-shadow: 0 2px 6px rgba(0,0,0,.25);
-        overflow: hidden;
-    }
-    
-    .chat-row .avatar img {
-        width: 100%;
-        height: 100%;
-        object-fit: cover;
-    }
-    
-    .chat-row.user .avatar {
-        order: 2;
-    }
-    
-    .chat-row.user .bubble {
-        order: 1;
-    }
-    
-    .chat-row.bot .avatar {
-        order: 1;
-    }
-    
-    .chat-row.bot .bubble {
-        order: 2;
-    }
-
-    .bubble {
-        max-width: 70vw;
-        padding: 12px 14px;
-        border-radius: 16px;
-        line-height: 1.45;
-        font-size: 0.95rem;
-        box-shadow: 0 2px 8px rgba(0,0,0,.25);
-        word-wrap: break-word;
-        white-space: pre-wrap;
-    }
-    
-    .user-bubble {
-        background: linear-gradient(180deg,#0057ff,#1a73e8);
-        color: #ffffff !important;
-        border-bottom-right-radius: 6px;
-    }
-    
-    .bot-bubble {
-        background: #E4E6EB;
-        color: #000000 !important;
-        border-bottom-left-radius: 6px;
-    }
-    
-    /* Force text color in chat bubbles */
-    .user-bubble * {
-        color: #ffffff !important;
-    }
-    
-    .bot-bubble * {
-        color: #000000 !important;
-    }
-    
-    /* Clear button styling */
-    .stButton > button {
-        color: #000000 !important;
-        background-color: #f0f0f0 !important;
-        border: 1px solid #cccccc !important;
-    }
-    
-    .stButton > button:hover {
-        color: #ffffff !important;
-        background-color: #ff4444 !important;
-        border: 1px solid #ff4444 !important;
-    }
-    
-    /* Sticky chat input */
-    div[data-testid="stChatInput"] {
-        position: fixed;
-        left: 5%;
-        right: 5%;
-        bottom: 24px;
-        z-index: 999;
-        max-width: 900px;
-        margin-left: auto;
-        margin-right: auto;
-        margin-bottom: 40px !important;
-    }
-    
-    div[data-testid="stChatInput"] textarea {
-        min-height: 36px !important;
-        font-size: 0.95rem !important;
-        padding: 6px 12px !important;
-        border-radius: 18px !important;
-        color: #000000 !important;
-        background-color: #ffffff !important;
-    }
-    
-    div[data-testid="stChatInput"] textarea::placeholder {
-        color: #666666 !important;
-    }
-    
-    main .block-container {
-        padding-bottom: 120px;
-    }
-    
-    .chat-row:last-child {
-        margin-bottom: 30px !important;
-    }
-    
-    /* Hide source chips */
-    .src-chip {
-        display: none !important;
-    }
-    
-    /* Responsive design fixes */
-    @media (max-width: 768px) {
-        .profile-image {
-            width: 150px;
-        }
-        
-        .bubble {
-            max-width: 85vw;
-            font-size: 0.9rem;
-        }
-        
-        div[data-testid="stChatInput"] {
-            left: 2%;
-            right: 2%;
-        }
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
-
-# Helper functions
-def get_backend_url():
-    """Get backend URL from environment or secrets with fallback"""
+if not GOOGLE_API_KEY:
+    logger.warning("GOOGLE_API_KEY not set")
+else:
     try:
-        # Try environment variable first
-        backend_url = os.getenv("BACKEND_URL")
-        if backend_url:
-            return backend_url
-        
-        # Try Streamlit secrets
-        if hasattr(st, 'secrets') and "BACKEND_URL" in st.secrets:
-            return st.secrets["BACKEND_URL"]
-        
-        # Fallback URL (you should replace this with your actual backend URL)
-        return "https://your-backend-url.com"
-    except Exception:
-        return "https://your-backend-url.com"
-
-def avatar_html(url=None, text_fallback="U"):
-    """Generate avatar HTML with error handling"""
-    if url and url.strip():
-        return f'<div class="avatar"><img src="{url}" alt="Avatar" onerror="this.style.display=\'none\'"/></div>'
-    return f'<div class="avatar">{text_fallback}</div>'
-
-def safe_request(url, data, timeout=30):
-    """Make HTTP request with proper error handling"""
-    try:
-        response = requests.post(url, json=data, timeout=timeout)
-        response.raise_for_status()  # Raises HTTPError for bad status codes
-        return response.json()
-    except requests.exceptions.Timeout:
-        return {"error": "Request timed out. Please try again."}
-    except requests.exceptions.ConnectionError:
-        return {"error": "Cannot connect to server. Please check your connection."}
-    except requests.exceptions.HTTPError as e:
-        return {"error": f"Server error: {e.response.status_code}"}
-    except requests.exceptions.RequestException:
-        return {"error": "An error occurred while processing your request."}
+        genai.configure(api_key=GOOGLE_API_KEY)
+        logger.info("Google AI configured successfully")
     except Exception as e:
-        return {"error": f"Unexpected error: {str(e)}"}
+        logger.error(f"Failed to configure Google AI: {e}")
 
-# Header Section
-with st.container():
-    st.markdown('<div class="main-header">', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns([1, 3])
-    
-    with col1:
-        try:
-            st.markdown(
-                """
-                <div style='display: flex; justify-content: center; padding: 1rem;'>
-                    <img src='https://raw.githubusercontent.com/pornachapol/Resume/main/assets/profile_picture.jpeg' 
-                         class='profile-image' alt='Profile Picture' 
-                         onerror="this.src='data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgdmlld0JveD0iMCAwIDIwMCAyMDAiIGZpbGw9Im5vbmUiIHhtbG5zPSJodHRwOi8vd3d3LnczLm9yZy8yMDAwL3N2ZyI+PGNpcmNsZSBjeD0iMTAwIiBjeT0iMTAwIiByPSIxMDAiIGZpbGw9IiM0MDQwNDAiLz48dGV4dCB4PSIxMDAiIHk9IjEwNSIgZm9udC1mYW1pbHk9IkFyaWFsIiBmb250LXNpemU9IjQ4IiBmaWxsPSIjZmZmIiB0ZXh0LWFuY2hvcj0ibWlkZGxlIj5OPC90ZXh0Pjwvc3ZnPg=='; this.onerror=null;"/>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        except Exception:
-            # Fallback if image fails
-            st.markdown(
-                """
-                <div style='display: flex; justify-content: center; padding: 1rem;'>
-                    <div style='width: 200px; height: 200px; background: #404040; border-radius: 12px; 
-                                display: flex; align-items: center; justify-content: center; font-size: 48px; color: #fff;'>
-                        N
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-    
-    with col2:
-        st.markdown("<h1 style='font-size: 2.5rem; margin-bottom: 0.5rem; color: #ffffff;'>Nachapol Roc-anusorn</h1>", unsafe_allow_html=True)
-        st.markdown("<h2 style='font-size: 1.3rem; color: #cccccc; margin-top: 0;'>Process Improvement | Project Management | Operations Team Leadership</h2>", unsafe_allow_html=True)
-        
-        col_contact1, col_contact2 = st.columns(2)
-        
-        with col_contact1:
-            st.markdown(
-                """
-                <div style='margin-top: 1rem;'>
-                    <p>📍 Bangkok, Thailand</p>
-                    <p>📧 <a href="mailto:r.nachapol@gmail.com">r.nachapol@gmail.com</a></p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-            
-        with col_contact2:
-            st.markdown(
-                """
-                <div style='margin-top: 1rem;'>
-                    <p>📞 064-687-7333</p>
-                    <p>
-                        🔗 <a href="https://www.linkedin.com/in/r-nachapol" target="_blank" rel="noopener noreferrer">LinkedIn</a> | 
-                        💻 <a href="https://github.com/pornachapol" target="_blank" rel="noopener noreferrer">GitHub</a>
-                    </p>
-                </div>
-                """,
-                unsafe_allow_html=True
-            )
-        
-        # Resume Download
-        resume_url = "https://github.com/pornachapol/Resume/raw/main/assets/Nachapol_Resume_2025.pdf"
-        st.markdown(
-            f"""
-            <a href="{resume_url}" class="download-button" target="_blank" rel="noopener noreferrer">
-                📥 Download Resume (PDF)
-            </a>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Summary Section
-with st.container():
-    st.markdown('<div class="content-section" id="summary">', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-title">Professional Summary</h2>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        Operations and transformation leader with a proven track record in process optimization, automation, and cross-functional 
-        project management. Experienced across insurance, manufacturing, and retail industries. Adept at streamlining operations 
-        using Lean methods and analytics tools to improve business performance, service levels, and system efficiency.
-        """
-    )
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Skills Section
-with st.container():
-    st.markdown('<div class="content-section" id="skills">', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-title">Skills & Expertise</h2>', unsafe_allow_html=True)
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("<h3 style='font-size: 1.2rem; margin-bottom: 1rem;'>Technical & Automation</h3>", unsafe_allow_html=True)
-        
-        technical_skills = [
-            "UiPath", "Excel VBA / Macro", "Power BI / SQL", "Power Query",
-            "ETL Development", "Power Automate", "JavaScript (basic)",
-            "Python (basic)", "Jira"
-        ]
-        
-        html_skills = "".join(f'<span class="skill-tag">{skill}</span>' for skill in technical_skills)
-        st.markdown(html_skills, unsafe_allow_html=True)
-    
-    with col2:
-        st.markdown("<h3 style='font-size: 1.2rem; margin-bottom: 1rem;'>Business & Process</h3>", unsafe_allow_html=True)
-        
-        business_skills = [
-            "Lean Six Sigma", "SOP Standardization", "Project Management", "UAT Coordination",
-            "Supply Chain Analysis", "Inventory Management", "BRD Documentation",
-            "Process Optimization", "Data Visualization"
-        ]
-        
-        html_skills = "".join(f'<span class="skill-tag">{skill}</span>' for skill in business_skills)
-        st.markdown(html_skills, unsafe_allow_html=True)
-    
-    with col3:
-        st.markdown("<h3 style='font-size: 1.2rem; margin-bottom: 1rem;'>Leadership & Strategy</h3>", unsafe_allow_html=True)
-        
-        leadership_skills = [
-            "Team Management", "Change Management", "Performance Coaching", "Cross-functional Collaboration",
-            "Stakeholder Management", "Problem-Solving", "Communication",
-            "Time Management", "Decision-Making"
-        ]
-        
-        html_skills = "".join(f'<span class="skill-tag">{skill}</span>' for skill in leadership_skills)
-        st.markdown(html_skills, unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Experience Section
-with st.container():
-    st.markdown('<div class="content-section" id="experience">', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-title">Professional Experience</h2>', unsafe_allow_html=True)
-    
-    # Job 1
-    st.markdown('<h3 class="job-title">Claim Registration and Data Service Manager</h3>', unsafe_allow_html=True)
-    st.markdown('<p class="job-period">Generali Life Assurance (Thailand) | Dec 2024 – Present | Bangkok</p>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        • Manage operations for <span class="highlight">claim registration and data services</span> across credit and reimbursement claims<br>
-        • Coordinate workload allocation, <span class="highlight">SLA monitoring</span>, and team performance management<br>
-        • Collaborate with IT and business units to enhance system functionality and integration<br>
-        • <span class="highlight">Lead UAT preparation and execution</span> for e-Claim system initiatives<br>
-        • Conduct requirement gathering and document business needs into BRDs
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.markdown("<hr style='margin: 1.5rem 0; opacity: 0.3;'>", unsafe_allow_html=True)
-    
-    # Job 2
-    st.markdown('<h3 class="job-title">Business Transformation Manager</h3>', unsafe_allow_html=True)
-    st.markdown('<p class="job-period">NGG Enterprise Co., Ltd | Apr 2022 – Nov 2024 | Bangkok</p>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        • Lead <span class="highlight">digital transformation and business improvement projects</span> across departments<br>
-        • Design <span class="highlight">dashboards and analytics pipelines</span> using Power BI and ETL tools<br>
-        • Oversee end-to-end project delivery including feasibility, planning, and execution<br>
-        • Optimize internal processes through collaboration with functional teams
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.markdown("<hr style='margin: 1.5rem 0; opacity: 0.3;'>", unsafe_allow_html=True)
-    
-    # Job 3
-    st.markdown('<h3 class="job-title">Supervisor | Process Improvement Engineer</h3>', unsafe_allow_html=True)
-    st.markdown('<p class="job-period">Shinning Gold | Jul 2019 – Apr 2022 | Pathum Thani</p>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        • Supervise production teams and enforce <span class="highlight">standardized operating procedures</span><br>
-        • Develop <span class="highlight">automation tools</span> using Excel Macro and JavaScript for planning and reporting<br>
-        • Lead Lean-based improvement projects to reduce waste and improve efficiency<br>
-        • Align production capacity planning with business forecasts and operational targets
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.markdown("<hr style='margin: 1.5rem 0; opacity: 0.3;'>", unsafe_allow_html=True)
-    
-    # Job 4
-    st.markdown('<h3 class="job-title">Improvement Engineer</h3>', unsafe_allow_html=True)
-    st.markdown('<p class="job-period">Siam Kubota Corporation | Jun 2017 – Jun 2019 | Chonburi</p>', unsafe_allow_html=True)
-    st.markdown(
-        """
-        • Implement <span class="highlight">automation solutions</span> including AGV for production line optimization<br>
-        • Lead supply chain improvement initiatives including Set Box delivery system<br>
-        • Conduct process analysis and layout redesign to support labor efficiency<br>
-        • Participate in continuous improvement and quality control circle programs
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Achievements Section
-with st.container():
-    st.markdown('<div class="content-section" id="achievements">', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-title">Key Achievements</h2>', unsafe_allow_html=True)
-    
-    col1, col2, col3, col4 = st.columns(4)
-    
-    with col1:
-        st.markdown(
-            """
-            <div class="project-card">
-                <h4 style="margin-top: 0;">Operational Excellence at Generali</h4>
-                <p>Reduced registration backlog by <span class="highlight">70%</span> and improved SLA from <span class="highlight">75% to 95%</span>.
-                Successfully led UAT and deployment of e-Claim Data Integration system.</p>
-                <p><span class="award-badge">AWARD</span> Exceptional Performance (Innovation), Generali Thailand, 2025</p>
-                <p><span class="output-badge">OUTPUT</span> Reduced registration backlog by 70% and improved SLA from 75% to 95%.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-    with col2:
-        st.markdown(
-            """
-            <div class="project-card">
-                <h4 style="margin-top: 0;">Jewelry Vending Machine Project at NGG Enterprise</h4>
-                <p>Successfully launched jewelry vending machine from feasibility study through 
-                deployment, creating a new low-cost retail channel.</p>
-                <p><span class="output-badge">OUTPUT</span> Delivered full feasibility report, business model, and ready-to-launch kiosk design for executive consideration.</p>
-            </div>
-
-            <div class="project-card">
-                <h4 style="margin-top: 0;">End-to-End Sales Dashboard Implementation at NGG Enterprise</h4>
-                <p>Designed and implemented a real-time Sales Dashboard for executives using Power BI, AWS Cloud Storage, and Excel. Managed full-cycle data pipeline from cleansing to visualization using storytelling methodology and effective visual design principles.</p>
-                <p><span class="output-badge">OUTPUT</span> Reduced daily reporting by 1 hour and enabled real-time sales visibility.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    with col3:
-        st.markdown(
-            """
-            <div class="project-card">
-                <h4 style="margin-top: 0;">Inventory Optimization at Shinning Gold</h4>
-                <p>Reduced inventory redundancy by <span class="highlight">5%</span> (~20kg gold ≈ ฿6M) through 
-                comprehensive stock analysis and process redesign.</p>
-            </div>
-            
-            <div class="project-card">
-                <h4 style="margin-top: 0;">Manufacturing Performance at Shinning Gold</h4>
-                <p>Improved OEE by <span class="highlight">30%</span> and lead time by <span class="highlight">20%</span>; doubled daily output
-                through process standardization and workflow optimization.</p>
-                <p><span class="award-badge">AWARD</span> Team Efficiency Award, Shinning Gold, 2021</p>
-            </div>
-            
-            <div class="project-card">
-                <h4 style="margin-top: 0;">Automation & Cost Reduction at Shinning Gold</h4>
-                <p>Reduced manual workload by <span class="highlight">2 FTEs</span>, saving approximately 
-                ฿540,000/year through strategic automation of reporting and data processing.</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-        
-    with col4:
-        st.markdown(
-            """
-            <div class="project-card">
-                <h4 style="margin-top: 0;">Process Innovation at Siam Kubota</h4>
-                <p>Implemented AGV and Set Box projects for production flow enhancement at Siam Kubota.</p>
-                <p><span class="award-badge">AWARD</span> Best QCC Award, Siam Kubota, 2018</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Education & Certifications Section
-with st.container():
-    st.markdown('<div class="content-section" id="education">', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-title">Education & Certifications</h2>', unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown(
-            """
-            <div style="margin-bottom: 1.5rem;">
-                <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Master of Science in Management Analytics and Data Technologies</h4>
-                <p style="color: #cccccc; font-style: italic; margin-top: 0;">
-                    School of Applied Statistics, National Institute of Development Administration (NIDA)<br>
-                    Expected Completion: 2025
-                </p>
-                <p>Focus: Data Analytics, Process Improvement, and Business Strategy</p>
-            </div>
-            
-            <div>
-                <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Bachelor of Engineering in Industrial Engineering</h4>
-                <p style="color: #cccccc; font-style: italic; margin-top: 0;">
-                    Thammasat University<br>
-                    2013 – 2017
-                </p>
-                <p>GPA: 3.15</p>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    with col2:
-        st.markdown(
-            """
-            <div style="margin-bottom: 1.5rem;">
-                <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Certifications</h4>
-                <ul>
-                    <li>Lean Six Sigma – Green Belt</li>
-                </ul>
-            </div>
-            
-            <div>
-                <h4 style="margin-bottom: 0.3rem; color: #ffffff;">Languages</h4>
-                <ul>
-                    <li><strong>Thai</strong> – Native</li>
-                    <li><strong>English</strong> – Strong reading/writing, conversational speaking</li>
-                </ul>
-            </div>
-            """,
-            unsafe_allow_html=True
-        )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# Contact Footer
-with st.container():
-    st.markdown('<div class="content-section" style="text-align: center; padding: 2rem;">', unsafe_allow_html=True)
-    st.markdown('<h2 class="section-title" style="border-bottom: none;">Contact Information</h2>', unsafe_allow_html=True)
-    
-    st.markdown(
-        """
-        <div style="display: flex; justify-content: center; gap: 2rem; flex-wrap: wrap;">
-            <div>
-                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>📍 Location</strong></p>
-                <p style="color: #ffffff !important;">Bangkok, Thailand</p>
-            </div>
-            <div>
-                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>📧 Email</strong></p>
-                <p style="color: #ffffff !important;"><a href="mailto:r.nachapol@gmail.com">r.nachapol@gmail.com</a></p>
-            </div>
-            <div>
-                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>📞 Phone</strong></p>
-                <p style="color: #ffffff !important;">064-687-7333</p>
-            </div>
-            <div>
-                <p style="margin-bottom: 0.5rem; color: #ffffff !important;"><strong>🔗 Social</strong></p>
-                <p style="color: #ffffff !important;">
-                    <a href="https://www.linkedin.com/in/r-nachapol" target="_blank" rel="noopener noreferrer">LinkedIn</a> | 
-                    <a href="https://github.com/pornachapol" target="_blank" rel="noopener noreferrer">GitHub</a>
-                </p>
-            </div>
-        </div>
-        """,
-        unsafe_allow_html=True
-    )
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-
-# ========================= Chatbot Section =========================
-st.divider()
-
-# Create subheader with forced white color
-st.markdown('<h3 style="color: #ffffff !important; margin-bottom: 1rem;">💬 Chat with my Profile</h3>', unsafe_allow_html=True)
-
-# Initialize session state
-if "chat" not in st.session_state:
-    st.session_state.chat = []
-
-if "backend_url" not in st.session_state:
-    st.session_state.backend_url = get_backend_url()
-
-# Avatar configuration
-AVATAR_USER = "https://i.imgur.com/1XK7Q9U.png"
-AVATAR_BOT = "https://i.imgur.com/3G4cK6X.png"
-
-# Display chat history
-for role, msg in st.session_state.chat:
-    if role == "user":
-        st.markdown(
-            f"<div class='chat-row user'>{avatar_html(AVATAR_USER,'U')}<div class='bubble user-bubble'>{msg}</div></div>",
-            unsafe_allow_html=True
-        )
-    else:
-        st.markdown(
-            f"<div class='chat-row bot'>{avatar_html(AVATAR_BOT,'B')}<div class='bubble bot-bubble'>{msg}</div></div>",
-            unsafe_allow_html=True
-        )
-
-# Chat input
-user_input = st.chat_input("พิมพ์ข้อความเหมือนคุยใน Messenger เลย...")
-
-if user_input and user_input.strip():
-    # Add user message to chat history
-    st.session_state.chat.append(("user", user_input))
-    
-    # Display user message immediately
-    st.markdown(
-        f"<div class='chat-row user'>{avatar_html(AVATAR_USER,'U')}<div class='bubble user-bubble'>{user_input}</div></div>",
-        unsafe_allow_html=True
-    )
-
-    # Show loading indicator
-    with st.spinner("กำลังตอบกลับ..."):
-        # Make request to backend
-        response_data = safe_request(
-            f"{st.session_state.backend_url}/chat",
-            {"message": user_input},
-            timeout=60
-        )
-        
-        # Process response
-        if "error" in response_data:
-            bot_response = f"❌ {response_data['error']}"
-        else:
-            bot_response = response_data.get("reply", "ขออภัย ระบบไม่สามารถตอบกลับได้ในขณะนี้")
-    
-    # Add bot response to chat history
-    st.session_state.chat.append(("assistant", bot_response))
-    
-    # Display bot response
-    st.markdown(
-        f"<div class='chat-row bot'>{avatar_html(AVATAR_BOT,'B')}<div class='bubble bot-bubble'>{bot_response}</div></div>",
-        unsafe_allow_html=True
-    )
-    
-    # Rerun to update the display
-    st.rerun()
-
-# Add a clear chat button
-if st.session_state.chat:
-    if st.button("🗑️ Clear Chat History", help="Clear all chat messages"):
-        st.session_state.chat = []
-        st.rerun()
-
-# Footer with additional info
-st.markdown(
-    """
-    <div style="text-align: center; padding: 2rem; margin-top: 2rem; border-top: 1px solid #404040; color: #ffffff !important;">
-        <p style="color: #cccccc !important; font-size: 0.9rem; margin: 0;">
-            💡 This chatbot can answer questions about Nachapol's experience, skills, and projects.
-        </p>
-        <p style="color: #cccccc !important; font-size: 0.9rem; margin: 0.5rem 0 0 0;">
-            Feel free to ask about specific achievements, technical expertise, or career background!
-        </p>
-    </div>
-    """,
-    unsafe_allow_html=True
+# ===================== APP =====================
+app = FastAPI(title="Enhanced Resume Chatbot", version="2.0.0")
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS or ["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
+
+# ===================== Schemas =====================
+class ChatRequest(BaseModel):
+    message: str = Field(..., min_length=1, max_length=1000)
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: List[Tuple[int, str]] = []
+    response_type: str = "mixed"  # factual, opinion, mixed
+    confidence: float = 0.0  # Confidence in factual information
+
+# ===================== Enhanced Data Structures =====================
+class ResumeChunk:
+    def __init__(self, content: str, section: str = "general", metadata: Dict = None):
+        self.content = content
+        self.section = section
+        self.metadata = metadata or {}
+        
+class ProfileData:
+    def __init__(self):
+        self.name_en = None
+        self.name_th = None
+        self.email = None
+        self.phone = None
+        self.location = None
+        self.linkedin = None
+        self.github = None
+        self.skills = []
+        self.experience = []
+        self.education = []
+        self.strengths = []
+        self.achievements = []
+
+class QuestionClassifier:
+    """Classify questions to determine appropriate response strategy"""
+    
+    @staticmethod
+    def classify_question(question: str) -> Dict[str, Any]:
+        q_lower = question.lower()
+        
+        # Direct factual questions
+        factual_patterns = [
+            r'ชื่ออะไร|what.*name',
+            r'อีเมล|email',
+            r'เบอร์|โทร|phone',
+            r'ที่อยู่|location|address',
+            r'ประสบการณ์กี่ปี|years.*experience',
+            r'เรียนจบ|graduated|education',
+            r'ทำงานที่|work.*at|company'
+        ]
+        
+        # Opinion/analysis questions
+        opinion_patterns = [
+            r'เหมาะ|suitable|fit|match',
+            r'จุดแข็ง|จุดอ่อน|strength|weakness',
+            r'แนะนำ|recommend|suggest',
+            r'คิดว่า|think|opinion',
+            r'ประเมิน|evaluate|assess',
+            r'เปรียบเทียบ|compare',
+            r'ควร|should|would',
+            r'โอกาส|opportunity|potential'
+        ]
+        
+        # Skill/capability questions (semi-factual)
+        skill_patterns = [
+            r'ทักษะ|skill|ability|competent',
+            r'สามารถ|can|able',
+            r'มีประสบการณ์.*ใน|experience.*in',
+            r'เคยทำ|have.*done|worked.*on'
+        ]
+        
+        # Interview simulation questions
+        interview_patterns = [
+            r'ทำไม.*สนใจ|why.*interested',
+            r'motivat|แรงจูงใจ',
+            r'goal|เป้าหมาย',
+            r'expect.*salary|เงินเดือน.*คาด',
+            r'weakness|จุดอ่อน.*คุณ',
+            r'challenge|ความท้าทาย'
+        ]
+        
+        question_type = "factual"  # default
+        needs_opinion = False
+        interview_mode = False
+        confidence_threshold = 0.7
+        
+        for pattern in factual_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "factual"
+                confidence_threshold = 0.9
+                break
+                
+        for pattern in opinion_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "opinion"
+                needs_opinion = True
+                confidence_threshold = 0.5
+                break
+                
+        for pattern in skill_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "capability"
+                needs_opinion = True
+                confidence_threshold = 0.6
+                break
+                
+        for pattern in interview_patterns:
+            if re.search(pattern, q_lower):
+                question_type = "interview"
+                needs_opinion = True
+                interview_mode = True
+                confidence_threshold = 0.3
+                break
+        
+        return {
+            "type": question_type,
+            "needs_opinion": needs_opinion,
+            "interview_mode": interview_mode,
+            "confidence_threshold": confidence_threshold
+        }
+
+# ===================== Global Variables =====================
+RESUME_CHUNKS: List[ResumeChunk] = []
+PROFILE: ProfileData = ProfileData()
+VECTORIZER = None
+TFIDF_MATRIX = None
+EMB_MATRIX = None
+LAST_FETCH_AT = 0
+
+# ===================== Enhanced Parsing =====================
+def parse_structured_resume(text: str) -> Tuple[ProfileData, List[ResumeChunk]]:
+    """Parse resume with better structure awareness"""
+    profile = ProfileData()
+    chunks = []
+    
+    lines = [l.strip() for l in text.split('\n') if l.strip()]
+    current_section = "general"
+    section_content = []
+    
+    # Section patterns
+    section_patterns = {
+        'basic_info': r'(basic information|personal|contact)',
+        'summary': r'(professional summary|summary|profile)',
+        'skills': r'(skills|expertise|competencies|technical)',
+        'experience': r'(professional experience|experience|work history|career)',
+        'education': r'(education|academic|qualification)',
+        'achievements': r'(achievements|accomplishments|key results)',
+        'strengths': r'(strengths|weaknesses)',
+        'goals': r'(goals|objectives|future|passion)'
+    }
+    
+    try:
+        for line in lines:
+            line_lower = line.lower()
+            
+            # Detect section changes
+            new_section = None
+            for section, pattern in section_patterns.items():
+                if re.search(pattern, line_lower):
+                    new_section = section
+                    break
+            
+            if new_section:
+                # Save previous section
+                if section_content:
+                    chunk = ResumeChunk(
+                        content='\n'.join(section_content),
+                        section=current_section,
+                        metadata={'line_count': len(section_content)}
+                    )
+                    chunks.append(chunk)
+                
+                current_section = new_section
+                section_content = [line]
+            else:
+                section_content.append(line)
+        
+        # Save last section
+        if section_content:
+            chunk = ResumeChunk(
+                content='\n'.join(section_content),
+                section=current_section,
+                metadata={'line_count': len(section_content)}
+            )
+            chunks.append(chunk)
+        
+        # Extract profile data safely
+        full_text = text.lower()
+        
+        # Names
+        name_match = re.search(r'name \(en\):\s*([^\n]+)', text, re.IGNORECASE)
+        if name_match:
+            profile.name_en = name_match.group(1).strip()
+        
+        th_name_match = re.search(r'ชื่อภาษาไทย:\s*([^\n]+)', text)
+        if th_name_match:
+            profile.name_th = th_name_match.group(1).strip()
+        
+        # Contact info
+        email_match = re.search(r'email:\s*([^\s\n]+)', text, re.IGNORECASE)
+        if email_match:
+            profile.email = email_match.group(1).strip()
+            
+        phone_match = re.search(r'phone:\s*([^\s\n]+)', text, re.IGNORECASE)
+        if phone_match:
+            profile.phone = phone_match.group(1).strip()
+            
+        location_match = re.search(r'location:\s*([^\n]+)', text, re.IGNORECASE)
+        if location_match:
+            profile.location = location_match.group(1).strip()
+        
+        # Skills extraction (improved)
+        skills_section = next((c.content for c in chunks if c.section == 'skills'), '')
+        if skills_section:
+            # Extract skills from bullet points and comma-separated lists
+            skill_lines = re.findall(r'[•·-]\s*([^\n]+)', skills_section)
+            for line in skill_lines:
+                skills = re.split(r'[,/|]', line)
+                profile.skills.extend([s.strip() for s in skills if s.strip()])
+        
+        logger.info(f"Successfully parsed resume: {len(chunks)} chunks, profile name: {profile.name_en}")
+        return profile, chunks
+        
+    except Exception as e:
+        logger.error(f"Error parsing resume: {e}")
+        return profile, chunks
+
+# ===================== Enhanced Query Processing =====================
+def expand_query_for_context(query: str, question_class: Dict) -> List[str]:
+    """Expand query based on question classification"""
+    queries = [query]
+    query_lower = query.lower()
+    
+    if question_class["type"] == "opinion":
+        # For opinion questions, get broader context
+        if 'data' in query_lower:
+            queries.extend([
+                'data analysis experience',
+                'SQL Python analytics',
+                'business intelligence reporting',
+                'statistical analysis'
+            ])
+        if 'project' in query_lower:
+            queries.extend([
+                'project management',
+                'team leadership',
+                'stakeholder management'
+            ])
+        if 'management' in query_lower:
+            queries.extend([
+                'leadership experience',
+                'team management',
+                'people management'
+            ])
+    
+    elif question_class["type"] == "capability":
+        # For capability questions, focus on skills and experience
+        queries.extend([
+            'technical skills experience',
+            'professional experience',
+            'achievements results'
+        ])
+    
+    elif question_class["type"] == "interview":
+        # For interview questions, get personal insights
+        queries.extend([
+            'goals objectives motivation',
+            'strengths achievements',
+            'challenges learning'
+        ])
+    
+    return queries
+
+def multi_query_retrieval(query: str, question_class: Dict, k: int = 5) -> List[Tuple[int, str, float]]:
+    """Enhanced retrieval with question-aware strategy"""
+    if not RESUME_CHUNKS or not VECTORIZER:
+        logger.warning("No resume chunks or vectorizer available")
+        return []
+    
+    all_results = {}  # chunk_idx -> max_score
+    
+    try:
+        queries = expand_query_for_context(query, question_class)
+        
+        for q in queries:
+            # TF-IDF retrieval
+            qv = VECTORIZER.transform([q])
+            tfidf_scores = cosine_similarity(qv, TFIDF_MATRIX).ravel()
+            
+            # Embedding retrieval
+            emb_scores = np.zeros_like(tfidf_scores)
+            if EMB_MATRIX is not None and EMB_MATRIX.size > 0:
+                emb_q = embed_texts([q])
+                if emb_q is not None and emb_q.size > 0:
+                    qn = emb_q / (np.linalg.norm(emb_q, axis=1, keepdims=True) + 1e-12)
+                    emb_scores = (EMB_MATRIX @ qn.T).ravel()
+            
+            # Question-type aware scoring
+            for i, (tfidf_score, emb_score) in enumerate(zip(tfidf_scores, emb_scores)):
+                hybrid_score = 0.4 * tfidf_score + 0.6 * emb_score
+                
+                section = RESUME_CHUNKS[i].section
+                
+                # Boost scores based on question type
+                if question_class["type"] == "factual":
+                    if section in ['basic_info', 'education', 'experience']:
+                        hybrid_score *= 1.5
+                elif question_class["type"] == "opinion":
+                    if section in ['achievements', 'experience', 'skills']:
+                        hybrid_score *= 1.3
+                elif question_class["type"] == "interview":
+                    if section in ['goals', 'strengths', 'summary']:
+                        hybrid_score *= 1.4
+                
+                all_results[i] = max(all_results.get(i, 0), hybrid_score)
+        
+        # Sort and return top k
+        sorted_results = sorted(all_results.items(), key=lambda x: x[1], reverse=True)
+        
+        results = []
+        for idx, score in sorted_results[:k]:
+            if score > question_class["confidence_threshold"] * 0.1:
+                results.append((idx, RESUME_CHUNKS[idx].content, score))
+        
+        logger.info(f"Retrieved {len(results)} relevant chunks for {question_class['type']} question")
+        return results
+        
+    except Exception as e:
+        logger.error(f"Error in multi_query_retrieval: {e}")
+        return []
+
+# ===================== Smart Response Generation =====================
+def generate_smart_response(question: str, contexts: List[str], question_class: Dict) -> Tuple[str, str]:
+    """Generate intelligent response based on question type and available context"""
+    if not contexts:
+        return handle_no_context_response(question, question_class)
+    
+    try:
+        model = genai.GenerativeModel(MODEL_NAME)
+        
+        if question_class["type"] == "factual":
+            prompt = f"""
+คุณเป็น AI Assistant ที่ตอบคำถามจากเรซูเม่อย่างแม่นยำ
+
+**หลักการตอบ:**
+- ตอบจากข้อเท็จจริงในเรซูเม่เป็นหลัก
+- หากไม่มีข้อมูลตรงตัว ให้บอกชัดเจนว่า "ไม่ระบุในเรซูเม่"
+- ตอบกระชับ ตรงประเด็น
+
+**ข้อมูลจากเรซูเม่:**
+{chr(10).join(contexts)}
+
+**คำถาม:** {question}
+
+กรุณาตอบเป็นภาษาไทยที่ชัดเจน
+"""
+            response_type = "factual"
+            
+        elif question_class["type"] == "opinion" or question_class["type"] == "capability":
+            prompt = f"""
+คุณเป็น AI Recruiter ที่วิเคราะห์เรซูเม่อย่างเชี่ยวชาญ
+
+**การตอบ:**
+1. แยกชัดเจนระหว่างข้อเท็จจริงและความเห็น
+2. ให้ความเห็นที่สมเหตุสมผลตามข้อมูลจริง
+3. ประเมินจุดแข็งและโอกาสพัฒนา
+
+**รูปแบบ:**
+📋 **ข้อเท็จจริงจากเรซูเม่:**
+[สรุปข้อมูลที่เกี่ยวข้อง]
+
+💡 **ความเห็นและการประเมิน:**
+[วิเคราะห์และคำแนะนำ]
+
+**ข้อมูลจากเรซูเม่:**
+{chr(10).join(contexts)}
+
+**คำถาม:** {question}
+
+ตอบเป็นภาษาไทยที่เข้าใจง่าย
+"""
+            response_type = "mixed"
+            
+        elif question_class["type"] == "interview":
+            prompt = f"""
+คุณกำลังจำลองการตอบคำถามสัมภาษณ์งานในนาม Nachapol
+
+**หลักการ:**
+- ตอบในบุคคลที่ 1 (ผม/ดิฉัน)
+- อ้างอิงข้อมูลจริงจากเรซูเม่
+- แสดงบุคลิกที่เหมาะสมกับตำแหน่งงาน
+- เพิ่มความน่าเชื่อถือด้วยตัวอย่างจริง
+
+**ข้อมูลจากเรซูเม่:**
+{chr(10).join(contexts)}
+
+**คำถามสัมภาษณ์:** {question}
+
+*หมายเหตุ: นี่คือการจำลองคำตอบตามข้อมูลในเรซูเม่*
+
+ตอบในลักษณะผู้สมัครงานที่มั่นใจและมืออาชีพ
+"""
+            response_type = "interview_simulation"
+            
+        else:
+            # Default mixed response
+            prompt = f"""
+คุณเป็น AI Assistant ที่ช่วยตอบคำถามเกี่ยวกับเรซูเม่
+
+**ข้อมูลจากเรซูเม่:**
+{chr(10).join(contexts)}
+
+**คำถาม:** {question}
+
+ตอบอย่างเป็นธรรมชาติและเป็นประโยชน์
+"""
+            response_type = "mixed"
+        
+        # Generate response
+        generation_config = genai.types.GenerationConfig(
+            temperature=0.3 if question_class["type"] == "factual" else 0.7,
+            top_p=0.8,
+            top_k=40,
+            max_output_tokens=2048,
+        )
+        
+        response = model.generate_content(prompt, generation_config=generation_config)
+        answer = (getattr(response, "text", "") or "").strip()
+        
+        if not answer:
+            return "❌ ไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่", response_type
+            
+        return answer, response_type
+        
+    except Exception as e:
+        logger.error(f"Error in generate_smart_response: {e}")
+        return "❌ เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่", "error"
+
+def handle_no_context_response(question: str, question_class: Dict) -> Tuple[str, str]:
+    """Handle cases where no relevant context is found"""
+    
+    if question_class["type"] == "factual":
+        return "ขออภัย ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาลองถามในรูปแบบอื่น", "no_context"
+    
+    elif question_class["type"] == "interview":
+        # Try to give a general interview-style response
+        model = genai.GenerativeModel(MODEL_NAME)
+        prompt = f"""
+คุณกำลังตอบคำถามสัมภาษณ์ในฐานะผู้สมัครงาน แต่คำถามนี้ไม่มีข้อมูลเฉพาะในเรซูเม่
+
+ให้ตอบเป็นคำตอบทั่วไปที่เหมาะสมสำหรับผู้สมัครงาน พร้อมระบุว่าเป็นคำตอบทั่วไป
+
+**คำถาม:** {question}
+
+*หมายเหตุ: คำตอบนี้เป็นการจำลองทั่วไป ไม่ใช่ข้อมูลเฉพาะจากเรซูเม่*
+"""
+        try:
+            response = model.generate_content(prompt)
+            answer = getattr(response, "text", "").strip()
+            return answer or "ขออภัย ไม่สามารถตอบคำถามนี้ได้", "general_interview"
+        except:
+            return "ขออภัย คำถามนี้ต้องการข้อมูลเฉพาะที่ไม่มีในเรซูเม่", "no_context"
+    
+    else:
+        return "ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาลองถามในรูปแบบอื่น หรือถามคำถามที่เฉพาะเจาะจงมากขึ้น", "no_context"
+
+# ===================== Profile-based Quick Answers =====================
+def get_quick_answer(question: str) -> Optional[Tuple[str, str]]:
+    """Quick answers for basic profile questions with response type"""
+    try:
+        q_lower = question.lower().replace(" ", "")
+        
+        # Name questions
+        if any(k in q_lower for k in ["ชื่ออะไร", "ชื่อคืออะไร", "name", "fullname"]):
+            if "thai" in q_lower or "ไทย" in q_lower:
+                if PROFILE.name_th:
+                    return f"ชื่อภาษาไทย: {PROFILE.name_th}", "factual"
+            elif PROFILE.name_en:
+                result = f"ชื่อ: {PROFILE.name_en}"
+                if PROFILE.name_th:
+                    result += f" (ภาษาไทย: {PROFILE.name_th})"
+                return result, "factual"
+        
+        # Contact info
+        if "email" in q_lower or "อีเมล" in q_lower:
+            if PROFILE.email:
+                return f"อีเมล: {PROFILE.email}", "factual"
+            
+        if "phone" in q_lower or "โทร" in q_lower:
+            if PROFILE.phone:
+                return f"เบอร์โทร: {PROFILE.phone}", "factual"
+            
+        if "location" in q_lower or "ที่อยู่" in q_lower:
+            if PROFILE.location:
+                return f"ที่ตั้ง: {PROFILE.location}", "factual"
+        
+        return None
+        
+    except Exception as e:
+        logger.error(f"Error in get_quick_answer: {e}")
+        return None
+
+# ===================== Utility Functions =====================
+def embed_texts(texts: List[str]) -> np.ndarray:
+    """Embed texts using Google AI with better error handling"""
+    if not texts:
+        return np.zeros((0, 1))
+    
+    try:
+        resp = genai.embed_content(
+            model="text-embedding-004",
+            content=texts,
+            task_type="retrieval_document"
+        )
+        
+        embs = resp.get("embeddings") or resp.get("embedding")
+        if isinstance(embs, list) and isinstance(embs[0], dict) and "values" in embs[0]:
+            vecs = np.array([e["values"] for e in embs], dtype="float32")
+        elif isinstance(embs, dict) and "values" in embs:
+            vecs = np.array([embs["values"]], dtype="float32")
+        else:
+            vecs = np.array(embs, dtype="float32")
+        
+        logger.info(f"Successfully embedded {len(texts)} texts")
+        return vecs
+        
+    except Exception as e:
+        logger.error(f"Error in embed_texts: {e}")
+        return np.zeros((len(texts), 1), dtype="float32")
+
+def calculate_response_confidence(contexts: List[str], question: str, question_class: Dict) -> float:
+    """Calculate confidence score for the response"""
+    if not contexts:
+        return 0.0
+    
+    # Base confidence from context quality
+    context_length = sum(len(c.split()) for c in contexts)
+    base_confidence = min(context_length / 100, 1.0)  # Normalize by expected context length
+    
+    # Adjust by question type
+    if question_class["type"] == "factual":
+        # Factual questions need precise information
+        confidence_multiplier = 1.0
+    elif question_class["type"] == "opinion":
+        # Opinion questions are inherently less certain
+        confidence_multiplier = 0.7
+    elif question_class["type"] == "interview":
+        # Interview simulations are moderate confidence
+        confidence_multiplier = 0.8
+    else:
+        confidence_multiplier = 0.6
+    
+    return base_confidence * confidence_multiplier
+
+async def fetch_resume_text() -> str:
+    """Fetch resume content from URL with better error handling"""
+    if not RESUME_URL:
+        logger.warning("No RESUME_URL provided")
+        return ""
+        
+    headers = {"User-Agent": "resume-bot/1.0"}
+    try:
+        async with httpx.AsyncClient(timeout=60) as client:
+            r = await client.get(RESUME_URL, follow_redirects=True, headers=headers)
+            r.raise_for_status()
+            
+            content_type = (r.headers.get("Content-Type") or "").lower()
+            
+            if "application/pdf" in content_type or RESUME_URL.lower().endswith(".pdf"):
+                doc = fitz.open(stream=r.content, filetype="pdf")
+                pages = []
+                for page in doc:
+                    text = page.get_text()
+                    if text.strip():
+                        pages.append(text)
+                text_content = "\n".join(pages)
+                logger.info(f"Successfully fetched PDF content: {len(text_content)} characters")
+                return text_content
+            else:
+                soup = BeautifulSoup(r.text, "html.parser")
+                text_content = soup.get_text()
+                logger.info(f"Successfully fetched HTML content: {len(text_content)} characters")
+                return text_content
+                
+    except Exception as e:
+        logger.error(f"Error fetching resume: {e}")
+        return ""
+
+def build_search_index():
+    """Build TF-IDF and embedding indices with error handling"""
+    global VECTORIZER, TFIDF_MATRIX, EMB_MATRIX
+    
+    if not RESUME_CHUNKS:
+        logger.warning("No resume chunks to index")
+        return
+    
+    try:
+        contents = [chunk.content for chunk in RESUME_CHUNKS]
+        
+        # TF-IDF
+        VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1,2), max_features=1000)
+        TFIDF_MATRIX = VECTORIZER.fit_transform(contents)
+        
+        # Embeddings
+        EMB_MATRIX = embed_texts(contents)
+        if EMB_MATRIX is not None and EMB_MATRIX.size > 0:
+            norms = np.linalg.norm(EMB_MATRIX, axis=1, keepdims=True) + 1e-12
+            EMB_MATRIX = EMB_MATRIX / norms
+        
+        logger.info(f"Built search index with {len(contents)} chunks")
+        
+    except Exception as e:
+        logger.error(f"Error building search index: {e}")
+
+async def ensure_data_loaded(force: bool = False):
+    """Ensure resume data is loaded and indexed with better error handling"""
+    global PROFILE, RESUME_CHUNKS, LAST_FETCH_AT
+    
+    if RESUME_CHUNKS and not force and (time.time() - LAST_FETCH_AT < 3600):
+        return
+    
+    try:
+        text = await fetch_resume_text()
+        if text:
+            PROFILE, RESUME_CHUNKS = parse_structured_resume(text)
+            build_search_index()
+            LAST_FETCH_AT = time.time()
+            logger.info(f"Data loaded successfully: {len(RESUME_CHUNKS)} chunks")
+        else:
+            logger.warning("No resume text fetched")
+    except Exception as e:
+        logger.error(f"Error ensuring data loaded: {e}")
+
+# ===================== API Routes =====================
+@app.get("/")
+def home():
+    return {
+        "service": "enhanced-resume-chatbot", 
+        "status": "ready",
+        "version": "2.0.0",
+        "features": ["intelligent_classification", "interview_simulation", "confidence_scoring"]
+    }
+
+@app.get("/health")
+async def health():
+    try:
+        await ensure_data_loaded()
+        return {
+            "ok": True, 
+            "chunks": len(RESUME_CHUNKS),
+            "profile_loaded": bool(PROFILE.name_en or PROFILE.name_th),
+            "vectorizer_ready": VECTORIZER is not None,
+            "embeddings_ready": EMB_MATRIX is not None,
+            "ai_ready": bool(GOOGLE_API_KEY)
+        }
+    except Exception as e:
+        logger.error(f"Health check failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/debug")
+async def debug():
+    try:
+        await ensure_data_loaded()
+        return {
+            "chunks_count": len(RESUME_CHUNKS),
+            "sections": [chunk.section for chunk in RESUME_CHUNKS],
+            "profile": {
+                "name_en": PROFILE.name_en,
+                "name_th": PROFILE.name_th,
+                "email": PROFILE.email,
+                "skills_count": len(PROFILE.skills)
+            },
+            "last_fetch": LAST_FETCH_AT,
+            "intelligent_features": True
+        }
+    except Exception as e:
+        logger.error(f"Debug endpoint failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/refresh")
+async def refresh():
+    try:
+        await ensure_data_loaded(force=True)
+        return {
+            "ok": True, 
+            "chunks": len(RESUME_CHUNKS),
+            "message": "Data refreshed successfully"
+        }
+    except Exception as e:
+        logger.error(f"Refresh failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/chat", response_model=ChatResponse)
+async def chat(req: ChatRequest):
+    try:
+        await ensure_data_loaded()
+        
+        question = (req.message or "").strip()
+        if not question:
+            return ChatResponse(
+                reply="👋 สวัสดีครับ! ผมคือ AI Assistant ที่จะช่วยตอบคำถามเกี่ยวกับเรซูเม่ของคุณ Nachapol\n\n🔍 **ตัวอย่างคำถาม:**\n• ข้อมูลพื้นฐาน: ชื่ออะไร? อีเมลคืออะไร?\n• ทักษะและความสามารถ: มีทักษะอะไรบ้าง?\n• การประเมิน: เหมาะกับตำแหน่ง Data Analyst ไหม?\n• สัมภาษณ์งาน: ทำไมสนใจตำแหน่งนี้?\n\n💡 ระบบจะแยกแยะระหว่างข้อเท็จจริงในเรซูเม่กับความเห็นส่วนตัวให้ชัดเจน",
+                sources=[],
+                response_type="greeting",
+                confidence=1.0
+            )
+        
+        # Classify the question
+        question_class = QuestionClassifier.classify_question(question)
+        
+        # Try quick answer first for factual questions
+        if question_class["type"] == "factual":
+            quick = get_quick_answer(question)
+            if quick:
+                return ChatResponse(
+                    reply=quick[0], 
+                    sources=[],
+                    response_type=quick[1],
+                    confidence=0.95
+                )
+        
+        # Retrieve relevant contexts
+        hits = multi_query_retrieval(question, question_class, k=6)
+        contexts = [hit[1] for hit in hits[:4]]  # Use top 4 for better context
+        sources = [(hit[0], hit[1][:200] + "..." if len(hit[1]) > 200 else hit[1]) for hit in hits[:3]]
+        
+        # Calculate confidence
+        confidence = calculate_response_confidence(contexts, question, question_class)
+        
+        # Generate intelligent response
+        reply, response_type = generate_smart_response(question, contexts, question_class)
+        
+        # Add metadata for transparency
+        if response_type in ["mixed", "interview_simulation"]:
+            if not any(indicator in reply.lower() for indicator in ["📋", "💡", "หมายเหตุ"]):
+                # Add transparency note if not already included
+                if response_type == "interview_simulation":
+                    reply += "\n\n*หมายเหตุ: คำตอบนี้เป็นการจำลองการสัมภาษณ์ตามข้อมูลในเรซูเม่*"
+                elif confidence < 0.6:
+                    reply += "\n\n*หมายเหตุ: คำตอบบางส่วนอาจเป็นการวิเคราะห์จากข้อมูลที่มีอยู่*"
+        
+        return ChatResponse(
+            reply=reply, 
+            sources=sources,
+            response_type=response_type,
+            confidence=confidence
+        )
+        
+    except Exception as e:
+        logger.error(f"Chat endpoint failed: {e}")
+        return ChatResponse(
+            reply=f"❌ เกิดข้อผิดพลาดในระบบ: {str(e)}\n\nกรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ",
+            sources=[],
+            response_type="error",
+            confidence=0.0
+        )
+
+# ===================== Additional API Endpoints =====================
+@app.get("/profile")
+async def get_profile():
+    """Get structured profile data"""
+    try:
+        await ensure_data_loaded()
+        return {
+            "name_en": PROFILE.name_en,
+            "name_th": PROFILE.name_th,
+            "contact": {
+                "email": PROFILE.email,
+                "phone": PROFILE.phone,
+                "location": PROFILE.location
+            },
+            "skills": PROFILE.skills[:20],  # Top 20 skills
+            "sections": {
+                section: len([c for c in RESUME_CHUNKS if c.section == section])
+                for section in set(chunk.section for chunk in RESUME_CHUNKS)
+            }
+        }
+    except Exception as e:
+        logger.error(f"Profile endpoint failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/search/{query}")
+async def search_resume(query: str):
+    """Search in resume content"""
+    try:
+        await ensure_data_loaded()
+        question_class = QuestionClassifier.classify_question(query)
+        hits = multi_query_retrieval(query, question_class, k=5)
+        return {
+            "query": query,
+            "question_type": question_class["type"],
+            "results": [
+                {
+                    "chunk_id": chunk_idx,
+                    "section": RESUME_CHUNKS[chunk_idx].section if chunk_idx < len(RESUME_CHUNKS) else "unknown",
+                    "content": content[:300] + "..." if len(content) > 300 else content,
+                    "score": float(score)
+                }
+                for chunk_idx, content, score in hits
+            ]
+        }
+    except Exception as e:
+        logger.error(f"Search endpoint failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/analyze-question")
+async def analyze_question(req: ChatRequest):
+    """Analyze question type and strategy"""
+    try:
+        question_class = QuestionClassifier.classify_question(req.message)
+        
+        return {
+            "question": req.message,
+            "classification": question_class,
+            "strategy": {
+                "response_approach": question_class["type"],
+                "needs_opinion": question_class["needs_opinion"],
+                "interview_mode": question_class["interview_mode"],
+                "confidence_threshold": question_class["confidence_threshold"]
+            }
+        }
+    except Exception as e:
+        logger.error(f"Question analysis failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/simulate-interview")
+async def simulate_interview():
+    """Get common interview questions for testing"""
+    try:
+        await ensure_data_loaded()
+        
+        interview_questions = [
+            "ทำไมถึงสนใจตำแหน่งนี้?",
+            "จุดแข็งและจุดอ่อนของคุณคืออะไร?",
+            "เป้าหมายในอนาคตคืออะไร?",
+            "ท่านคาดหวังเงินเดือนเท่าไหร่?",
+            "มีประสบการณ์ที่ท้าทายที่สุดคืออะไร?",
+            "ทำไมถึงอยากเปลี่ยนงาน?",
+            "คุณจะจัดการกับแรงกดดันในการทำงานอย่างไร?",
+            "มีคำถามอะไรที่อยากถามเกี่ยวกับบริษัทบ้างไหม?"
+        ]
+        
+        # Generate sample responses for a few questions
+        sample_responses = {}
+        for q in interview_questions[:3]:
+            question_class = QuestionClassifier.classify_question(q)
+            hits = multi_query_retrieval(q, question_class, k=3)
+            contexts = [hit[1] for hit in hits]
+            
+            if contexts:
+                reply, _ = generate_smart_response(q, contexts, question_class)
+                sample_responses[q] = reply
+        
+        return {
+            "interview_questions": interview_questions,
+            "sample_responses": sample_responses,
+            "note": "ใช้ /chat endpoint เพื่อทดสอบคำถามสัมภาษณ์"
+        }
+        
+    except Exception as e:
+        logger.error(f"Interview simulation failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/capabilities")
+async def get_capabilities():
+    """Get chatbot capabilities and features"""
+    return {
+        "question_types": {
+            "factual": {
+                "description": "คำถามเกี่ยวกับข้อเท็จจริงในเรซูเม่",
+                "examples": ["ชื่ออะไร?", "อีเมลคืออะไร?", "เรียนจบจากไหน?"],
+                "response_style": "ตรงไปตรงมา อิงจากข้อมูลจริง"
+            },
+            "opinion": {
+                "description": "คำถามที่ต้องการการวิเคราะห์และความเห็น",
+                "examples": ["เหมาะกับตำแหน่ง Data Analyst ไหม?", "จุดแข็งคืออะไร?"],
+                "response_style": "แยกข้อเท็จจริงและความเห็นชัดเจน"
+            },
+            "capability": {
+                "description": "คำถามเกี่ยวกับทักษะและความสามารถ",
+                "examples": ["มีทักษะอะไรบ้าง?", "สามารถทำงานด้าน AI ได้ไหม?"],
+                "response_style": "อิงจากข้อมูลทักษะและประสบการณ์"
+            },
+            "interview": {
+                "description": "จำลองการสัมภาษณ์งาน",
+                "examples": ["ทำไมสนใจตำแหน่งนี้?", "เป้าหมายคืออะไร?"],
+                "response_style": "ตอบในฐานะผู้สมัครงาน"
+            }
+        },
+        "features": [
+            "อัตโนมัติจำแนกประเภทคำถาม",
+            "แยกข้อเท็จจริงและความเห็น",
+            "จำลองการสัมภาษณ์งาน",
+            "คำนวณค่าความเชื่อมั่นในคำตอบ",
+            "ค้นหาบริบทที่เกี่ยวข้องอัจฉริยะ"
+        ],
+        "transparency": {
+            "factual_responses": "อิงจากข้อมูลในเรซูเม่เท่านั้น",
+            "opinion_responses": "ระบุชัดเจนส่วนที่เป็นการวิเคราะห์",
+            "interview_simulation": "แจ้งเตือนว่าเป็นการจำลอง",
+            "confidence_scoring": "ให้คะแนนความเชื่อมั่นในคำตอบ"
+        }
+    }
+
+# ===================== Testing and Validation =====================
+@app.post("/test-intelligence")
+async def test_intelligence():
+    """Test the intelligent response system"""
+    try:
+        await ensure_data_loaded()
+        
+        test_cases = [
+            {
+                "question": "ชื่ออะไร?",
+                "expected_type": "factual",
+                "expected_confidence": "high"
+            },
+            {
+                "question": "เหมาะกับตำแหน่ง Data Scientist ไหม?",
+                "expected_type": "opinion",
+                "expected_confidence": "medium"
+            },
+            {
+                "question": "ทำไมถึงสนใจตำแหน่งนี้?",
+                "expected_type": "interview",
+                "expected_confidence": "low-medium"
+            },
+            {
+                "question": "มีทักษะด้าน Machine Learning ไหม?",
+                "expected_type": "capability",
+                "expected_confidence": "medium"
+            }
+        ]
+        
+        results = []
+        for test in test_cases:
+            question_class = QuestionClassifier.classify_question(test["question"])
+            hits = multi_query_retrieval(test["question"], question_class, k=3)
+            contexts = [hit[1] for hit in hits]
+            confidence = calculate_response_confidence(contexts, test["question"], question_class)
+            
+            if contexts:
+                reply, response_type = generate_smart_response(test["question"], contexts, question_class)
+            else:
+                reply, response_type = handle_no_context_response(test["question"], question_class)
+            
+            results.append({
+                "question": test["question"],
+                "expected_type": test["expected_type"],
+                "actual_type": question_class["type"],
+                "type_match": question_class["type"] == test["expected_type"],
+                "confidence": confidence,
+                "contexts_found": len(contexts),
+                "response_preview": reply[:100] + "..." if len(reply) > 100 else reply
+            })
+        
+        return {
+            "test_results": results,
+            "summary": {
+                "total_tests": len(test_cases),
+                "type_accuracy": sum(1 for r in results if r["type_match"]) / len(results),
+                "avg_confidence": sum(r["confidence"] for r in results) / len(results)
+            }
+        }
+        
+    except Exception as e:
+        logger.error(f"Intelligence test failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
