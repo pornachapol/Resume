@@ -2,7 +2,9 @@ fastapi
 uvicorn
 httpx
 beautifulsoup4
+pymupdf
 scikit-learn
-google-generativeai
-pymupdf         # <-- เพิ่ม: ใช้ดึงข้อความจาก PDF ให้เนียน
+scipy
 numpy
+pydantic
+google-generativeai>=0.7.0
