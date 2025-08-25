@@ -1,198 +1,267 @@
-import os, re, time, io
-from typing import List, Tuple, Optional, Dict, Any
-import httpx
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, Field
-from bs4 import BeautifulSoup
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
-import google.generativeai as genai
-import fitz  # PyMuPDF
-import numpy as np
-import logging
+import re, datetime
+from typing import List, Dict, Any, Optional, Tuple
+from dataclasses import dataclass, field
+from collections import defaultdict
+import json
 
-# Setup logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+@dataclass
+class TimelineEvent:
+    start_date: Optional[datetime.date] = None
+    end_date: Optional[datetime.date] = None
+    duration_months: int = 0
+    is_current: bool = False
+    date_precision: str = "month"  # year, month, day
+    
+    def __post_init__(self):
+        if self.start_date and self.end_date:
+            self.duration_months = (self.end_date.year - self.start_date.year) * 12 + \
+                                 (self.end_date.month - self.start_date.month)
+        elif self.start_date and self.is_current:
+            today = datetime.date.today()
+            self.duration_months = (today.year - self.start_date.year) * 12 + \
+                                 (today.month - self.start_date.month)
 
-# ===================== ENV =====================
-GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
-RESUME_URL = os.getenv("RESUME_URL")
-ALLOWED_ORIGINS = [o.strip() for o in (os.getenv("ALLOWED_ORIGINS", "")).split(",") if o.strip()]
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-2.0-flash")
+@dataclass
+class SkillEntity:
+    name: str
+    category: str  # technical, soft, language, certification, tool
+    proficiency: str = "mentioned"  # mentioned, basic, intermediate, advanced, expert
+    context: List[str] = field(default_factory=list)
+    years_experience: Optional[int] = None
+    
+@dataclass
+class Achievement:
+    title: str
+    metric: Optional[str] = None
+    value: Optional[str] = None
+    context: str = ""
+    timeline: Optional[TimelineEvent] = None
 
-if not GOOGLE_API_KEY:
-    logger.warning("GOOGLE_API_KEY not set")
-else:
-    try:
-        genai.configure(api_key=GOOGLE_API_KEY)
-        logger.info("Google AI configured successfully")
-    except Exception as e:
-        logger.error(f"Failed to configure Google AI: {e}")
-
-# ===================== APP =====================
-app = FastAPI(title="Enhanced Resume Chatbot", version="2.0.0")
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS or ["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# ===================== Schemas =====================
-class ChatRequest(BaseModel):
-    message: str = Field(..., min_length=1, max_length=1000)
-
-class ChatResponse(BaseModel):
-    reply: str
-    sources: List[Tuple[int, str]] = []
-    response_type: str = "mixed"  # factual, opinion, mixed
-    confidence: float = 0.0  # Confidence in factual information
-
-# ===================== Enhanced Data Structures =====================
-class ResumeChunk:
-    def __init__(self, content: str, section: str = "general", metadata: Dict = None):
-        self.content = content
-        self.section = section
-        self.metadata = metadata or {}
+@dataclass 
+class EnhancedResumeChunk:
+    content: str
+    section: str
+    subsection: str = ""
+    timeline: Optional[TimelineEvent] = None
+    entities: List[SkillEntity] = field(default_factory=list)
+    achievements: List[Achievement] = field(default_factory=list)
+    keywords: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+    
+    def __post_init__(self):
+        # Auto-extract keywords
+        self.keywords = self._extract_keywords()
         
-class ProfileData:
+    def _extract_keywords(self) -> List[str]:
+        """Extract important keywords from content"""
+        # Industry terms, tools, methodologies
+        keyword_patterns = [
+            r'\b(?:Excel|SQL|Python|JavaScript|Power BI|ETL|RPA|AGV|SLA|UAT|BRD)\b',
+            r'\b(?:Lean|Six Sigma|Automation|Analytics|Dashboard|Process)\b',
+            r'\b(?:Project Management|Team Leadership|Business Analysis)\b',
+            r'\b(?:Manufacturing|Insurance|Retail|Supply Chain)\b'
+        ]
+        
+        keywords = []
+        for pattern in keyword_patterns:
+            matches = re.findall(pattern, self.content, re.IGNORECASE)
+            keywords.extend([m.lower() for m in matches])
+        
+        return list(set(keywords))
+
+@dataclass
+class EnhancedProfileData:
+    # Basic info
+    name_en: str = ""
+    name_th: str = ""
+    email: str = ""
+    phone: str = ""
+    location: str = ""
+    linkedin: str = ""
+    github: str = ""
+    
+    # Skills taxonomy
+    skills: Dict[str, List[SkillEntity]] = field(default_factory=lambda: defaultdict(list))
+    
+    # Timeline-based data
+    experience: List[Dict[str, Any]] = field(default_factory=list)
+    education: List[Dict[str, Any]] = field(default_factory=list)
+    
+    # Achievements and metrics
+    achievements: List[Achievement] = field(default_factory=list)
+    
+    # Career progression
+    career_timeline: List[TimelineEvent] = field(default_factory=list)
+    total_experience_years: float = 0
+    
+    # Domain expertise
+    industry_experience: Dict[str, int] = field(default_factory=dict)  # industry -> months
+    role_progression: List[str] = field(default_factory=list)
+
+class EnhancedResumeParser:
     def __init__(self):
-        self.name_en = None
-        self.name_th = None
-        self.email = None
-        self.phone = None
-        self.location = None
-        self.linkedin = None
-        self.github = None
-        self.skills = []
-        self.experience = []
-        self.education = []
-        self.strengths = []
-        self.achievements = []
-
-class QuestionClassifier:
-    """Classify questions to determine appropriate response strategy"""
-    
-    @staticmethod
-    def classify_question(question: str) -> Dict[str, Any]:
-        q_lower = question.lower()
-        
-        # Direct factual questions
-        factual_patterns = [
-            r'ชื่ออะไร|what.*name',
-            r'อีเมล|email',
-            r'เบอร์|โทร|phone',
-            r'ที่อยู่|location|address',
-            r'ประสบการณ์กี่ปี|years.*experience',
-            r'เรียนจบ|graduated|education',
-            r'ทำงานที่|work.*at|company'
-        ]
-        
-        # Opinion/analysis questions
-        opinion_patterns = [
-            r'เหมาะ|suitable|fit|match',
-            r'จุดแข็ง|จุดอ่อน|strength|weakness',
-            r'แนะนำ|recommend|suggest',
-            r'คิดว่า|think|opinion',
-            r'ประเมิน|evaluate|assess',
-            r'เปรียบเทียบ|compare',
-            r'ควร|should|would',
-            r'โอกาส|opportunity|potential'
-        ]
-        
-        # Skill/capability questions (semi-factual)
-        skill_patterns = [
-            r'ทักษะ|skill|ability|competent',
-            r'สามารถ|can|able',
-            r'มีประสบการณ์.*ใน|experience.*in',
-            r'เคยทำ|have.*done|worked.*on'
-        ]
-        
-        # Interview simulation questions
-        interview_patterns = [
-            r'ทำไม.*สนใจ|why.*interested',
-            r'motivat|แรงจูงใจ',
-            r'goal|เป้าหมาย',
-            r'expect.*salary|เงินเดือน.*คาด',
-            r'weakness|จุดอ่อน.*คุณ',
-            r'challenge|ความท้าทาย'
-        ]
-        
-        question_type = "factual"  # default
-        needs_opinion = False
-        interview_mode = False
-        confidence_threshold = 0.7
-        
-        for pattern in factual_patterns:
-            if re.search(pattern, q_lower):
-                question_type = "factual"
-                confidence_threshold = 0.9
-                break
-                
-        for pattern in opinion_patterns:
-            if re.search(pattern, q_lower):
-                question_type = "opinion"
-                needs_opinion = True
-                confidence_threshold = 0.5
-                break
-                
-        for pattern in skill_patterns:
-            if re.search(pattern, q_lower):
-                question_type = "capability"
-                needs_opinion = True
-                confidence_threshold = 0.6
-                break
-                
-        for pattern in interview_patterns:
-            if re.search(pattern, q_lower):
-                question_type = "interview"
-                needs_opinion = True
-                interview_mode = True
-                confidence_threshold = 0.3
-                break
-        
-        return {
-            "type": question_type,
-            "needs_opinion": needs_opinion,
-            "interview_mode": interview_mode,
-            "confidence_threshold": confidence_threshold
+        # Skill taxonomy
+        self.skill_categories = {
+            'technical': [
+                'python', 'sql', 'javascript', 'excel', 'power bi', 'etl', 
+                'rpa', 'automation', 'agv', 'lean six sigma', 'analytics'
+            ],
+            'tools': [
+                'excel', 'power bi', 'javascript', 'macro', 'dashboard',
+                'etl', 'agv', 'rpa'
+            ],
+            'methodologies': [
+                'lean', 'six sigma', 'process improvement', 'project management',
+                'business analysis', 'uât', 'brd'
+            ],
+            'soft': [
+                'leadership', 'team management', 'stakeholder management',
+                'cross-functional', 'collaboration'
+            ],
+            'languages': ['thai', 'english'],
+            'certifications': ['lean six sigma green belt']
         }
-
-# ===================== Global Variables =====================
-RESUME_CHUNKS: List[ResumeChunk] = []
-PROFILE: ProfileData = ProfileData()
-VECTORIZER = None
-TFIDF_MATRIX = None
-EMB_MATRIX = None
-LAST_FETCH_AT = 0
-
-# ===================== Enhanced Parsing =====================
-def parse_structured_resume(text: str) -> Tuple[ProfileData, List[ResumeChunk]]:
-    """Parse resume with better structure awareness"""
-    profile = ProfileData()
-    chunks = []
+        
+        # Industry mapping
+        self.industry_keywords = {
+            'insurance': ['claim', 'reimbursement', 'generali', 'sla'],
+            'manufacturing': ['production', 'kubota', 'agv', 'supply chain'],
+            'retail': ['vending', 'commission', 'shinning gold'],
+            'consulting': ['ngg enterprise', 'business transformation']
+        }
+        
+        # Date patterns
+        self.date_patterns = [
+            r'(?P<month>Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)\s+(?P<year>\d{4})',
+            r'(?P<month>\d{1,2})/(?P<year>\d{4})',
+            r'(?P<year>\d{4})',
+        ]
     
-    lines = [l.strip() for l in text.split('\n') if l.strip()]
-    current_section = "general"
-    section_content = []
+    def parse_date(self, date_str: str) -> Optional[datetime.date]:
+        """Parse various date formats"""
+        date_str = date_str.strip().replace(',', '')
+        
+        month_map = {
+            'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
+            'jul': 7, 'aug': 8, 'sep': 9, 'oct': 10, 'nov': 11, 'dec': 12
+        }
+        
+        for pattern in self.date_patterns:
+            match = re.search(pattern, date_str, re.IGNORECASE)
+            if match:
+                groups = match.groupdict()
+                year = int(groups['year'])
+                
+                if 'month' in groups and groups['month']:
+                    if groups['month'].isdigit():
+                        month = int(groups['month'])
+                    else:
+                        month = month_map.get(groups['month'].lower()[:3], 1)
+                else:
+                    month = 1
+                    
+                try:
+                    return datetime.date(year, month, 1)
+                except ValueError:
+                    continue
+        
+        return None
     
-    # Section patterns
-    section_patterns = {
-        'basic_info': r'(basic information|personal|contact)',
-        'summary': r'(professional summary|summary|profile)',
-        'skills': r'(skills|expertise|competencies|technical)',
-        'experience': r'(professional experience|experience|work history|career)',
-        'education': r'(education|academic|qualification)',
-        'achievements': r'(achievements|accomplishments|key results)',
-        'strengths': r'(strengths|weaknesses)',
-        'goals': r'(goals|objectives|future|passion)'
-    }
+    def extract_timeline(self, text: str) -> Optional[TimelineEvent]:
+        """Extract timeline information from text"""
+        # Look for date ranges
+        date_range_pattern = r'(?P<start>(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}/)\s*\d{4})\s*[-–]\s*(?P<end>(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec|\d{1,2}/)\s*\d{4}|Present)'
+        
+        match = re.search(date_range_pattern, text, re.IGNORECASE)
+        if match:
+            start_str = match.group('start')
+            end_str = match.group('end')
+            
+            start_date = self.parse_date(start_str)
+            
+            if end_str.lower() in ['present', 'current']:
+                end_date = None
+                is_current = True
+            else:
+                end_date = self.parse_date(end_str)
+                is_current = False
+            
+            return TimelineEvent(
+                start_date=start_date,
+                end_date=end_date,
+                is_current=is_current
+            )
+        
+        return None
     
-    try:
-        for line in lines:
+    def categorize_skill(self, skill: str) -> str:
+        """Categorize a skill"""
+        skill_lower = skill.lower()
+        
+        for category, keywords in self.skill_categories.items():
+            if any(keyword in skill_lower for keyword in keywords):
+                return category
+        
+        return 'other'
+    
+    def extract_achievements(self, text: str) -> List[Achievement]:
+        """Extract quantified achievements"""
+        achievements = []
+        
+        # Patterns for achievements with metrics
+        achievement_patterns = [
+            r'(\d+)%\+?\s*(improvement|increase|reduction|saved)',
+            r'(\d+(?:,\d+)*)\s*(THB|USD|baht)/year\s*saved',
+            r'(\d+)\s*(kg|tons?|hours?|days?)\s*(reduction|saved|improved)',
+            r'(led|implemented|achieved|reduced|increased)\s+([^.]+?)(?:\.|$)'
+        ]
+        
+        for pattern in achievement_patterns:
+            matches = re.finditer(pattern, text, re.IGNORECASE)
+            for match in matches:
+                if match.group(1).isdigit():
+                    # Quantified achievement
+                    value = match.group(1)
+                    metric = match.group(2) if len(match.groups()) > 1 else ""
+                    achievement = Achievement(
+                        title=match.group(0).strip(),
+                        metric=metric,
+                        value=value,
+                        context=text[:100]
+                    )
+                else:
+                    # Qualitative achievement
+                    achievement = Achievement(
+                        title=match.group(0).strip(),
+                        context=text[:100]
+                    )
+                
+                achievements.append(achievement)
+        
+        return achievements
+    
+    def parse_structured_resume(self, text: str) -> Tuple[EnhancedProfileData, List[EnhancedResumeChunk]]:
+        """Enhanced parsing with rich metadata"""
+        profile = EnhancedProfileData()
+        chunks = []
+        
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+        
+        # Better section detection based on actual resume structure
+        section_patterns = {
+            'header': r'^[A-Z\s]{10,}$|contact.*info|name|email|phone',
+            'summary': r'process improvement.*leader|professional.*summary',
+            'expertise': r'area.*expertise|key.*skills|expertise',
+            'experience': r'professional.*experience|experience|work.*history',
+            'education': r'education|academic|degree|university',
+            'achievements': r'key.*achievements?|accomplishments?',
+            'additional': r'additional.*information|languages?|certifications?'
+        }
+        
+        current_section = "general"
+        section_content = []
+        
+        for i, line in enumerate(lines):
             line_lower = line.lower()
             
             # Detect section changes
@@ -202,13 +271,49 @@ def parse_structured_resume(text: str) -> Tuple[ProfileData, List[ResumeChunk]]:
                     new_section = section
                     break
             
-            if new_section:
+            # Also detect by formatting (all caps, etc.)
+            if line.isupper() and len(line) > 10:
+                if any(keyword in line_lower for keyword in ['experience', 'education', 'expertise']):
+                    for section in section_patterns.keys():
+                        if section in line_lower:
+                            new_section = section
+                            break
+            
+            if new_section and new_section != current_section:
                 # Save previous section
                 if section_content:
-                    chunk = ResumeChunk(
-                        content='\n'.join(section_content),
+                    content_text = '\n'.join(section_content)
+                    
+                    # Extract timeline for this section
+                    timeline = self.extract_timeline(content_text)
+                    
+                    # Extract achievements
+                    achievements = self.extract_achievements(content_text)
+                    
+                    # Extract skills
+                    skills = []
+                    for category, keywords in self.skill_categories.items():
+                        for keyword in keywords:
+                            if keyword.lower() in content_text.lower():
+                                skill = SkillEntity(
+                                    name=keyword,
+                                    category=category,
+                                    context=[current_section]
+                                )
+                                skills.append(skill)
+                    
+                    chunk = EnhancedResumeChunk(
+                        content=content_text,
                         section=current_section,
-                        metadata={'line_count': len(section_content)}
+                        timeline=timeline,
+                        entities=skills,
+                        achievements=achievements,
+                        metadata={
+                            'line_count': len(section_content),
+                            'char_count': len(content_text),
+                            'has_timeline': timeline is not None,
+                            'achievement_count': len(achievements)
+                        }
                     )
                     chunks.append(chunk)
                 
@@ -219,795 +324,266 @@ def parse_structured_resume(text: str) -> Tuple[ProfileData, List[ResumeChunk]]:
         
         # Save last section
         if section_content:
-            chunk = ResumeChunk(
-                content='\n'.join(section_content),
+            content_text = '\n'.join(section_content)
+            timeline = self.extract_timeline(content_text)
+            achievements = self.extract_achievements(content_text)
+            
+            chunk = EnhancedResumeChunk(
+                content=content_text,
                 section=current_section,
+                timeline=timeline,
+                achievements=achievements,
                 metadata={'line_count': len(section_content)}
             )
             chunks.append(chunk)
         
-        # Extract profile data safely
-        full_text = text.lower()
+        # Extract profile data with enhanced metadata
+        self._extract_profile_data(profile, chunks, text)
         
-        # Names
-        name_match = re.search(r'name \(en\):\s*([^\n]+)', text, re.IGNORECASE)
-        if name_match:
-            profile.name_en = name_match.group(1).strip()
-        
-        th_name_match = re.search(r'ชื่อภาษาไทย:\s*([^\n]+)', text)
-        if th_name_match:
-            profile.name_th = th_name_match.group(1).strip()
-        
-        # Contact info
-        email_match = re.search(r'email:\s*([^\s\n]+)', text, re.IGNORECASE)
+        return profile, chunks
+    
+    def _extract_profile_data(self, profile: EnhancedProfileData, chunks: List[EnhancedResumeChunk], full_text: str):
+        """Extract enhanced profile data"""
+        # Basic contact info
+        email_match = re.search(r'([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', full_text)
         if email_match:
-            profile.email = email_match.group(1).strip()
-            
-        phone_match = re.search(r'phone:\s*([^\s\n]+)', text, re.IGNORECASE)
+            profile.email = email_match.group(1)
+        
+        phone_match = re.search(r'(\d{3}-\d{3}-\d{4})', full_text)
         if phone_match:
-            profile.phone = phone_match.group(1).strip()
+            profile.phone = phone_match.group(1)
+        
+        # Extract name from first meaningful line
+        first_line = full_text.split('\n')[0].strip()
+        if not any(char in first_line for char in ['@', '|', 'Thailand']):
+            profile.name_en = first_line
+        
+        # Build skill taxonomy
+        for chunk in chunks:
+            for entity in chunk.entities:
+                profile.skills[entity.category].append(entity)
+        
+        # Extract experience timeline
+        experience_chunks = [c for c in chunks if c.section == 'experience']
+        career_events = []
+        
+        for chunk in experience_chunks:
+            if chunk.timeline:
+                # Extract company and role
+                lines = chunk.content.split('\n')
+                for line in lines:
+                    if any(company in line.lower() for company in ['kubota', 'shinning', 'ngg', 'generali']):
+                        # Parse role and company
+                        role_match = re.search(r'([^,]+),\s*([^,\n]+)', line)
+                        if role_match:
+                            role = role_match.group(1).strip()
+                            company = role_match.group(2).strip()
+                            
+                            exp_record = {
+                                'role': role,
+                                'company': company,
+                                'timeline': chunk.timeline,
+                                'achievements': chunk.achievements,
+                                'skills': [e.name for e in chunk.entities]
+                            }
+                            profile.experience.append(exp_record)
+                            career_events.append(chunk.timeline)
+        
+        # Calculate total experience
+        total_months = sum(event.duration_months for event in career_events if event.duration_months)
+        profile.total_experience_years = round(total_months / 12, 1)
+        
+        # Industry experience mapping
+        for exp in profile.experience:
+            company = exp['company'].lower()
+            months = exp['timeline'].duration_months if exp['timeline'] else 0
             
-        location_match = re.search(r'location:\s*([^\n]+)', text, re.IGNORECASE)
-        if location_match:
-            profile.location = location_match.group(1).strip()
+            for industry, keywords in self.industry_keywords.items():
+                if any(keyword in company for keyword in keywords):
+                    profile.industry_experience[industry] = profile.industry_experience.get(industry, 0) + months
         
-        # Skills extraction (improved)
-        skills_section = next((c.content for c in chunks if c.section == 'skills'), '')
-        if skills_section:
-            # Extract skills from bullet points and comma-separated lists
-            skill_lines = re.findall(r'[•·-]\s*([^\n]+)', skills_section)
-            for line in skill_lines:
-                skills = re.split(r'[,/|]', line)
-                profile.skills.extend([s.strip() for s in skills if s.strip()])
+        # Role progression
+        profile.role_progression = [exp['role'] for exp in sorted(profile.experience, 
+                                   key=lambda x: x['timeline'].start_date if x['timeline'] and x['timeline'].start_date else datetime.date.min)]
         
-        logger.info(f"Successfully parsed resume: {len(chunks)} chunks, profile name: {profile.name_en}")
-        return profile, chunks
-        
-    except Exception as e:
-        logger.error(f"Error parsing resume: {e}")
-        return profile, chunks
+        # Collect all achievements
+        for chunk in chunks:
+            profile.achievements.extend(chunk.achievements)
 
-# ===================== Enhanced Query Processing =====================
-def expand_query_for_context(query: str, question_class: Dict) -> List[str]:
-    """Expand query based on question classification"""
-    queries = [query]
-    query_lower = query.lower()
+# Usage example and integration helper
+class EnhancedResumeManager:
+    def __init__(self):
+        self.parser = EnhancedResumeParser()
+        self.profile: Optional[EnhancedProfileData] = None
+        self.chunks: List[EnhancedResumeChunk] = []
+        self.metadata_index = {}
+        
+    def load_resume(self, text: str):
+        """Load and parse resume with enhanced features"""
+        self.profile, self.chunks = self.parser.parse_structured_resume(text)
+        self._build_metadata_index()
     
-    if question_class["type"] == "opinion":
-        # For opinion questions, get broader context
-        if 'data' in query_lower:
-            queries.extend([
-                'data analysis experience',
-                'SQL Python analytics',
-                'business intelligence reporting',
-                'statistical analysis'
-            ])
-        if 'project' in query_lower:
-            queries.extend([
-                'project management',
-                'team leadership',
-                'stakeholder management'
-            ])
-        if 'management' in query_lower:
-            queries.extend([
-                'leadership experience',
-                'team management',
-                'people management'
-            ])
-    
-    elif question_class["type"] == "capability":
-        # For capability questions, focus on skills and experience
-        queries.extend([
-            'technical skills experience',
-            'professional experience',
-            'achievements results'
-        ])
-    
-    elif question_class["type"] == "interview":
-        # For interview questions, get personal insights
-        queries.extend([
-            'goals objectives motivation',
-            'strengths achievements',
-            'challenges learning'
-        ])
-    
-    return queries
-
-def multi_query_retrieval(query: str, question_class: Dict, k: int = 5) -> List[Tuple[int, str, float]]:
-    """Enhanced retrieval with question-aware strategy"""
-    if not RESUME_CHUNKS or not VECTORIZER:
-        logger.warning("No resume chunks or vectorizer available")
-        return []
-    
-    all_results = {}  # chunk_idx -> max_score
-    
-    try:
-        queries = expand_query_for_context(query, question_class)
-        
-        for q in queries:
-            # TF-IDF retrieval
-            qv = VECTORIZER.transform([q])
-            tfidf_scores = cosine_similarity(qv, TFIDF_MATRIX).ravel()
-            
-            # Embedding retrieval
-            emb_scores = np.zeros_like(tfidf_scores)
-            if EMB_MATRIX is not None and EMB_MATRIX.size > 0:
-                emb_q = embed_texts([q])
-                if emb_q is not None and emb_q.size > 0:
-                    qn = emb_q / (np.linalg.norm(emb_q, axis=1, keepdims=True) + 1e-12)
-                    emb_scores = (EMB_MATRIX @ qn.T).ravel()
-            
-            # Question-type aware scoring
-            for i, (tfidf_score, emb_score) in enumerate(zip(tfidf_scores, emb_scores)):
-                hybrid_score = 0.4 * tfidf_score + 0.6 * emb_score
-                
-                section = RESUME_CHUNKS[i].section
-                
-                # Boost scores based on question type
-                if question_class["type"] == "factual":
-                    if section in ['basic_info', 'education', 'experience']:
-                        hybrid_score *= 1.5
-                elif question_class["type"] == "opinion":
-                    if section in ['achievements', 'experience', 'skills']:
-                        hybrid_score *= 1.3
-                elif question_class["type"] == "interview":
-                    if section in ['goals', 'strengths', 'summary']:
-                        hybrid_score *= 1.4
-                
-                all_results[i] = max(all_results.get(i, 0), hybrid_score)
-        
-        # Sort and return top k
-        sorted_results = sorted(all_results.items(), key=lambda x: x[1], reverse=True)
-        
-        results = []
-        for idx, score in sorted_results[:k]:
-            if score > question_class["confidence_threshold"] * 0.1:
-                results.append((idx, RESUME_CHUNKS[idx].content, score))
-        
-        logger.info(f"Retrieved {len(results)} relevant chunks for {question_class['type']} question")
-        return results
-        
-    except Exception as e:
-        logger.error(f"Error in multi_query_retrieval: {e}")
-        return []
-
-# ===================== Smart Response Generation =====================
-def generate_smart_response(question: str, contexts: List[str], question_class: Dict) -> Tuple[str, str]:
-    """Generate intelligent response based on question type and available context"""
-    if not contexts:
-        return handle_no_context_response(question, question_class)
-    
-    try:
-        model = genai.GenerativeModel(MODEL_NAME)
-        
-        if question_class["type"] == "factual":
-            prompt = f"""
-คุณเป็น AI Assistant ที่ตอบคำถามจากเรซูเม่อย่างแม่นยำ
-
-**หลักการตอบ:**
-- ตอบจากข้อเท็จจริงในเรซูเม่เป็นหลัก
-- หากไม่มีข้อมูลตรงตัว ให้บอกชัดเจนว่า "ไม่ระบุในเรซูเม่"
-- ตอบกระชับ ตรงประเด็น
-
-**ข้อมูลจากเรซูเม่:**
-{chr(10).join(contexts)}
-
-**คำถาม:** {question}
-
-กรุณาตอบเป็นภาษาไทยที่ชัดเจน
-"""
-            response_type = "factual"
-            
-        elif question_class["type"] == "opinion" or question_class["type"] == "capability":
-            prompt = f"""
-คุณเป็น AI Recruiter ที่วิเคราะห์เรซูเม่อย่างเชี่ยวชาญ
-
-**การตอบ:**
-1. แยกชัดเจนระหว่างข้อเท็จจริงและความเห็น
-2. ให้ความเห็นที่สมเหตุสมผลตามข้อมูลจริง
-3. ประเมินจุดแข็งและโอกาสพัฒนา
-
-**รูปแบบ:**
-📋 **ข้อเท็จจริงจากเรซูเม่:**
-[สรุปข้อมูลที่เกี่ยวข้อง]
-
-💡 **ความเห็นและการประเมิน:**
-[วิเคราะห์และคำแนะนำ]
-
-**ข้อมูลจากเรซูเม่:**
-{chr(10).join(contexts)}
-
-**คำถาม:** {question}
-
-ตอบเป็นภาษาไทยที่เข้าใจง่าย
-"""
-            response_type = "mixed"
-            
-        elif question_class["type"] == "interview":
-            prompt = f"""
-คุณกำลังจำลองการตอบคำถามสัมภาษณ์งานในนาม Nachapol
-
-**หลักการ:**
-- ตอบในบุคคลที่ 1 (ผม/ดิฉัน)
-- อ้างอิงข้อมูลจริงจากเรซูเม่
-- แสดงบุคลิกที่เหมาะสมกับตำแหน่งงาน
-- เพิ่มความน่าเชื่อถือด้วยตัวอย่างจริง
-
-**ข้อมูลจากเรซูเม่:**
-{chr(10).join(contexts)}
-
-**คำถามสัมภาษณ์:** {question}
-
-*หมายเหตุ: นี่คือการจำลองคำตอบตามข้อมูลในเรซูเม่*
-
-ตอบในลักษณะผู้สมัครงานที่มั่นใจและมืออาชีพ
-"""
-            response_type = "interview_simulation"
-            
-        else:
-            # Default mixed response
-            prompt = f"""
-คุณเป็น AI Assistant ที่ช่วยตอบคำถามเกี่ยวกับเรซูเม่
-
-**ข้อมูลจากเรซูเม่:**
-{chr(10).join(contexts)}
-
-**คำถาม:** {question}
-
-ตอบอย่างเป็นธรรมชาติและเป็นประโยชน์
-"""
-            response_type = "mixed"
-        
-        # Generate response
-        generation_config = genai.types.GenerationConfig(
-            temperature=0.3 if question_class["type"] == "factual" else 0.7,
-            top_p=0.8,
-            top_k=40,
-            max_output_tokens=2048,
-        )
-        
-        response = model.generate_content(prompt, generation_config=generation_config)
-        answer = (getattr(response, "text", "") or "").strip()
-        
-        if not answer:
-            return "❌ ไม่สามารถประมวลผลคำตอบได้ กรุณาลองใหม่", response_type
-            
-        return answer, response_type
-        
-    except Exception as e:
-        logger.error(f"Error in generate_smart_response: {e}")
-        return "❌ เกิดข้อผิดพลาดในการประมวลผล กรุณาลองใหม่", "error"
-
-def handle_no_context_response(question: str, question_class: Dict) -> Tuple[str, str]:
-    """Handle cases where no relevant context is found"""
-    
-    if question_class["type"] == "factual":
-        return "ขออภัย ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาลองถามในรูปแบบอื่น", "no_context"
-    
-    elif question_class["type"] == "interview":
-        # Try to give a general interview-style response
-        model = genai.GenerativeModel(MODEL_NAME)
-        prompt = f"""
-คุณกำลังตอบคำถามสัมภาษณ์ในฐานะผู้สมัครงาน แต่คำถามนี้ไม่มีข้อมูลเฉพาะในเรซูเม่
-
-ให้ตอบเป็นคำตอบทั่วไปที่เหมาะสมสำหรับผู้สมัครงาน พร้อมระบุว่าเป็นคำตอบทั่วไป
-
-**คำถาม:** {question}
-
-*หมายเหตุ: คำตอบนี้เป็นการจำลองทั่วไป ไม่ใช่ข้อมูลเฉพาะจากเรซูเม่*
-"""
-        try:
-            response = model.generate_content(prompt)
-            answer = getattr(response, "text", "").strip()
-            return answer or "ขออภัย ไม่สามารถตอบคำถามนี้ได้", "general_interview"
-        except:
-            return "ขออภัย คำถามนี้ต้องการข้อมูลเฉพาะที่ไม่มีในเรซูเม่", "no_context"
-    
-    else:
-        return "ไม่พบข้อมูลที่เกี่ยวข้องในเรซูเม่ กรุณาลองถามในรูปแบบอื่น หรือถามคำถามที่เฉพาะเจาะจงมากขึ้น", "no_context"
-
-# ===================== Profile-based Quick Answers =====================
-def get_quick_answer(question: str) -> Optional[Tuple[str, str]]:
-    """Quick answers for basic profile questions with response type"""
-    try:
-        q_lower = question.lower().replace(" ", "")
-        
-        # Name questions
-        if any(k in q_lower for k in ["ชื่ออะไร", "ชื่อคืออะไร", "name", "fullname"]):
-            if "thai" in q_lower or "ไทย" in q_lower:
-                if PROFILE.name_th:
-                    return f"ชื่อภาษาไทย: {PROFILE.name_th}", "factual"
-            elif PROFILE.name_en:
-                result = f"ชื่อ: {PROFILE.name_en}"
-                if PROFILE.name_th:
-                    result += f" (ภาษาไทย: {PROFILE.name_th})"
-                return result, "factual"
-        
-        # Contact info
-        if "email" in q_lower or "อีเมล" in q_lower:
-            if PROFILE.email:
-                return f"อีเมล: {PROFILE.email}", "factual"
-            
-        if "phone" in q_lower or "โทร" in q_lower:
-            if PROFILE.phone:
-                return f"เบอร์โทร: {PROFILE.phone}", "factual"
-            
-        if "location" in q_lower or "ที่อยู่" in q_lower:
-            if PROFILE.location:
-                return f"ที่ตั้ง: {PROFILE.location}", "factual"
-        
-        return None
-        
-    except Exception as e:
-        logger.error(f"Error in get_quick_answer: {e}")
-        return None
-
-# ===================== Utility Functions =====================
-def embed_texts(texts: List[str]) -> np.ndarray:
-    """Embed texts using Google AI with better error handling"""
-    if not texts:
-        return np.zeros((0, 1))
-    
-    try:
-        resp = genai.embed_content(
-            model="text-embedding-004",
-            content=texts,
-            task_type="retrieval_document"
-        )
-        
-        embs = resp.get("embeddings") or resp.get("embedding")
-        if isinstance(embs, list) and isinstance(embs[0], dict) and "values" in embs[0]:
-            vecs = np.array([e["values"] for e in embs], dtype="float32")
-        elif isinstance(embs, dict) and "values" in embs:
-            vecs = np.array([embs["values"]], dtype="float32")
-        else:
-            vecs = np.array(embs, dtype="float32")
-        
-        logger.info(f"Successfully embedded {len(texts)} texts")
-        return vecs
-        
-    except Exception as e:
-        logger.error(f"Error in embed_texts: {e}")
-        return np.zeros((len(texts), 1), dtype="float32")
-
-def calculate_response_confidence(contexts: List[str], question: str, question_class: Dict) -> float:
-    """Calculate confidence score for the response"""
-    if not contexts:
-        return 0.0
-    
-    # Base confidence from context quality
-    context_length = sum(len(c.split()) for c in contexts)
-    base_confidence = min(context_length / 100, 1.0)  # Normalize by expected context length
-    
-    # Adjust by question type
-    if question_class["type"] == "factual":
-        # Factual questions need precise information
-        confidence_multiplier = 1.0
-    elif question_class["type"] == "opinion":
-        # Opinion questions are inherently less certain
-        confidence_multiplier = 0.7
-    elif question_class["type"] == "interview":
-        # Interview simulations are moderate confidence
-        confidence_multiplier = 0.8
-    else:
-        confidence_multiplier = 0.6
-    
-    return base_confidence * confidence_multiplier
-
-async def fetch_resume_text() -> str:
-    """Fetch resume content from URL with better error handling"""
-    if not RESUME_URL:
-        logger.warning("No RESUME_URL provided")
-        return ""
-        
-    headers = {"User-Agent": "resume-bot/1.0"}
-    try:
-        async with httpx.AsyncClient(timeout=60) as client:
-            r = await client.get(RESUME_URL, follow_redirects=True, headers=headers)
-            r.raise_for_status()
-            
-            content_type = (r.headers.get("Content-Type") or "").lower()
-            
-            if "application/pdf" in content_type or RESUME_URL.lower().endswith(".pdf"):
-                doc = fitz.open(stream=r.content, filetype="pdf")
-                pages = []
-                for page in doc:
-                    text = page.get_text()
-                    if text.strip():
-                        pages.append(text)
-                text_content = "\n".join(pages)
-                logger.info(f"Successfully fetched PDF content: {len(text_content)} characters")
-                return text_content
-            else:
-                soup = BeautifulSoup(r.text, "html.parser")
-                text_content = soup.get_text()
-                logger.info(f"Successfully fetched HTML content: {len(text_content)} characters")
-                return text_content
-                
-    except Exception as e:
-        logger.error(f"Error fetching resume: {e}")
-        return ""
-
-def build_search_index():
-    """Build TF-IDF and embedding indices with error handling"""
-    global VECTORIZER, TFIDF_MATRIX, EMB_MATRIX
-    
-    if not RESUME_CHUNKS:
-        logger.warning("No resume chunks to index")
-        return
-    
-    try:
-        contents = [chunk.content for chunk in RESUME_CHUNKS]
-        
-        # TF-IDF
-        VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1,2), max_features=1000)
-        TFIDF_MATRIX = VECTORIZER.fit_transform(contents)
-        
-        # Embeddings
-        EMB_MATRIX = embed_texts(contents)
-        if EMB_MATRIX is not None and EMB_MATRIX.size > 0:
-            norms = np.linalg.norm(EMB_MATRIX, axis=1, keepdims=True) + 1e-12
-            EMB_MATRIX = EMB_MATRIX / norms
-        
-        logger.info(f"Built search index with {len(contents)} chunks")
-        
-    except Exception as e:
-        logger.error(f"Error building search index: {e}")
-
-async def ensure_data_loaded(force: bool = False):
-    """Ensure resume data is loaded and indexed with better error handling"""
-    global PROFILE, RESUME_CHUNKS, LAST_FETCH_AT
-    
-    if RESUME_CHUNKS and not force and (time.time() - LAST_FETCH_AT < 3600):
-        return
-    
-    try:
-        text = await fetch_resume_text()
-        if text:
-            PROFILE, RESUME_CHUNKS = parse_structured_resume(text)
-            build_search_index()
-            LAST_FETCH_AT = time.time()
-            logger.info(f"Data loaded successfully: {len(RESUME_CHUNKS)} chunks")
-        else:
-            logger.warning("No resume text fetched")
-    except Exception as e:
-        logger.error(f"Error ensuring data loaded: {e}")
-
-# ===================== API Routes =====================
-@app.get("/")
-def home():
-    return {
-        "service": "enhanced-resume-chatbot", 
-        "status": "ready",
-        "version": "2.0.0",
-        "features": ["intelligent_classification", "interview_simulation", "confidence_scoring"]
-    }
-
-@app.get("/health")
-async def health():
-    try:
-        await ensure_data_loaded()
-        return {
-            "ok": True, 
-            "chunks": len(RESUME_CHUNKS),
-            "profile_loaded": bool(PROFILE.name_en or PROFILE.name_th),
-            "vectorizer_ready": VECTORIZER is not None,
-            "embeddings_ready": EMB_MATRIX is not None,
-            "ai_ready": bool(GOOGLE_API_KEY)
+    def _build_metadata_index(self):
+        """Build searchable metadata index"""
+        self.metadata_index = {
+            'skills_by_category': defaultdict(list),
+            'timeline_events': [],
+            'achievements_by_metric': defaultdict(list),
+            'keywords_by_section': defaultdict(set),
+            'industry_context': defaultdict(list)
         }
-    except Exception as e:
-        logger.error(f"Health check failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/debug")
-async def debug():
-    try:
-        await ensure_data_loaded()
-        return {
-            "chunks_count": len(RESUME_CHUNKS),
-            "sections": [chunk.section for chunk in RESUME_CHUNKS],
-            "profile": {
-                "name_en": PROFILE.name_en,
-                "name_th": PROFILE.name_th,
-                "email": PROFILE.email,
-                "skills_count": len(PROFILE.skills)
+        
+        for chunk in self.chunks:
+            # Index skills by category
+            for entity in chunk.entities:
+                self.metadata_index['skills_by_category'][entity.category].append(entity.name)
+            
+            # Index timeline events
+            if chunk.timeline:
+                self.metadata_index['timeline_events'].append({
+                    'section': chunk.section,
+                    'timeline': chunk.timeline,
+                    'content': chunk.content[:200]
+                })
+            
+            # Index achievements
+            for achievement in chunk.achievements:
+                if achievement.metric:
+                    self.metadata_index['achievements_by_metric'][achievement.metric].append(achievement)
+            
+            # Index keywords
+            self.metadata_index['keywords_by_section'][chunk.section].update(chunk.keywords)
+    
+    def get_contextual_information(self, query_type: str, specific_topic: str = None) -> Dict[str, Any]:
+        """Get rich contextual information for query processing"""
+        context = {
+            'profile_summary': {
+                'name': self.profile.name_en,
+                'total_experience': self.profile.total_experience_years,
+                'industries': list(self.profile.industry_experience.keys()),
+                'current_role': self.profile.role_progression[-1] if self.profile.role_progression else None
             },
-            "last_fetch": LAST_FETCH_AT,
-            "intelligent_features": True
-        }
-    except Exception as e:
-        logger.error(f"Debug endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/refresh")
-async def refresh():
-    try:
-        await ensure_data_loaded(force=True)
-        return {
-            "ok": True, 
-            "chunks": len(RESUME_CHUNKS),
-            "message": "Data refreshed successfully"
-        }
-    except Exception as e:
-        logger.error(f"Refresh failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/chat", response_model=ChatResponse)
-async def chat(req: ChatRequest):
-    try:
-        await ensure_data_loaded()
-        
-        question = (req.message or "").strip()
-        if not question:
-            return ChatResponse(
-                reply="👋 สวัสดีครับ! ผมคือ AI Assistant ที่จะช่วยตอบคำถามเกี่ยวกับเรซูเม่ของคุณ Nachapol\n\n🔍 **ตัวอย่างคำถาม:**\n• ข้อมูลพื้นฐาน: ชื่ออะไร? อีเมลคืออะไร?\n• ทักษะและความสามารถ: มีทักษะอะไรบ้าง?\n• การประเมิน: เหมาะกับตำแหน่ง Data Analyst ไหม?\n• สัมภาษณ์งาน: ทำไมสนใจตำแหน่งนี้?\n\n💡 ระบบจะแยกแยะระหว่างข้อเท็จจริงในเรซูเม่กับความเห็นส่วนตัวให้ชัดเจน",
-                sources=[],
-                response_type="greeting",
-                confidence=1.0
-            )
-        
-        # Classify the question
-        question_class = QuestionClassifier.classify_question(question)
-        
-        # Try quick answer first for factual questions
-        if question_class["type"] == "factual":
-            quick = get_quick_answer(question)
-            if quick:
-                return ChatResponse(
-                    reply=quick[0], 
-                    sources=[],
-                    response_type=quick[1],
-                    confidence=0.95
-                )
-        
-        # Retrieve relevant contexts
-        hits = multi_query_retrieval(question, question_class, k=6)
-        contexts = [hit[1] for hit in hits[:4]]  # Use top 4 for better context
-        sources = [(hit[0], hit[1][:200] + "..." if len(hit[1]) > 200 else hit[1]) for hit in hits[:3]]
-        
-        # Calculate confidence
-        confidence = calculate_response_confidence(contexts, question, question_class)
-        
-        # Generate intelligent response
-        reply, response_type = generate_smart_response(question, contexts, question_class)
-        
-        # Add metadata for transparency
-        if response_type in ["mixed", "interview_simulation"]:
-            if not any(indicator in reply.lower() for indicator in ["📋", "💡", "หมายเหตุ"]):
-                # Add transparency note if not already included
-                if response_type == "interview_simulation":
-                    reply += "\n\n*หมายเหตุ: คำตอบนี้เป็นการจำลองการสัมภาษณ์ตามข้อมูลในเรซูเม่*"
-                elif confidence < 0.6:
-                    reply += "\n\n*หมายเหตุ: คำตอบบางส่วนอาจเป็นการวิเคราะห์จากข้อมูลที่มีอยู่*"
-        
-        return ChatResponse(
-            reply=reply, 
-            sources=sources,
-            response_type=response_type,
-            confidence=confidence
-        )
-        
-    except Exception as e:
-        logger.error(f"Chat endpoint failed: {e}")
-        return ChatResponse(
-            reply=f"❌ เกิดข้อผิดพลาดในระบบ: {str(e)}\n\nกรุณาลองใหม่อีกครั้ง หรือติดต่อผู้ดูแลระบบ",
-            sources=[],
-            response_type="error",
-            confidence=0.0
-        )
-
-# ===================== Additional API Endpoints =====================
-@app.get("/profile")
-async def get_profile():
-    """Get structured profile data"""
-    try:
-        await ensure_data_loaded()
-        return {
-            "name_en": PROFILE.name_en,
-            "name_th": PROFILE.name_th,
-            "contact": {
-                "email": PROFILE.email,
-                "phone": PROFILE.phone,
-                "location": PROFILE.location
-            },
-            "skills": PROFILE.skills[:20],  # Top 20 skills
-            "sections": {
-                section: len([c for c in RESUME_CHUNKS if c.section == section])
-                for section in set(chunk.section for chunk in RESUME_CHUNKS)
-            }
-        }
-    except Exception as e:
-        logger.error(f"Profile endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/search/{query}")
-async def search_resume(query: str):
-    """Search in resume content"""
-    try:
-        await ensure_data_loaded()
-        question_class = QuestionClassifier.classify_question(query)
-        hits = multi_query_retrieval(query, question_class, k=5)
-        return {
-            "query": query,
-            "question_type": question_class["type"],
-            "results": [
-                {
-                    "chunk_id": chunk_idx,
-                    "section": RESUME_CHUNKS[chunk_idx].section if chunk_idx < len(RESUME_CHUNKS) else "unknown",
-                    "content": content[:300] + "..." if len(content) > 300 else content,
-                    "score": float(score)
-                }
-                for chunk_idx, content, score in hits
+            'timeline_context': self.metadata_index['timeline_events'],
+            'skill_taxonomy': dict(self.metadata_index['skills_by_category']),
+            'quantified_achievements': [
+                a for achievements in self.metadata_index['achievements_by_metric'].values() 
+                for a in achievements
             ]
         }
-    except Exception as e:
-        logger.error(f"Search endpoint failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/analyze-question")
-async def analyze_question(req: ChatRequest):
-    """Analyze question type and strategy"""
-    try:
-        question_class = QuestionClassifier.classify_question(req.message)
         
-        return {
-            "question": req.message,
-            "classification": question_class,
-            "strategy": {
-                "response_approach": question_class["type"],
-                "needs_opinion": question_class["needs_opinion"],
-                "interview_mode": question_class["interview_mode"],
-                "confidence_threshold": question_class["confidence_threshold"]
-            }
-        }
-    except Exception as e:
-        logger.error(f"Question analysis failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/simulate-interview")
-async def simulate_interview():
-    """Get common interview questions for testing"""
-    try:
-        await ensure_data_loaded()
-        
-        interview_questions = [
-            "ทำไมถึงสนใจตำแหน่งนี้?",
-            "จุดแข็งและจุดอ่อนของคุณคืออะไร?",
-            "เป้าหมายในอนาคตคืออะไร?",
-            "ท่านคาดหวังเงินเดือนเท่าไหร่?",
-            "มีประสบการณ์ที่ท้าทายที่สุดคืออะไร?",
-            "ทำไมถึงอยากเปลี่ยนงาน?",
-            "คุณจะจัดการกับแรงกดดันในการทำงานอย่างไร?",
-            "มีคำถามอะไรที่อยากถามเกี่ยวกับบริษัทบ้างไหม?"
-        ]
-        
-        # Generate sample responses for a few questions
-        sample_responses = {}
-        for q in interview_questions[:3]:
-            question_class = QuestionClassifier.classify_question(q)
-            hits = multi_query_retrieval(q, question_class, k=3)
-            contexts = [hit[1] for hit in hits]
+        if specific_topic:
+            # Add topic-specific context
+            topic_lower = specific_topic.lower()
+            relevant_chunks = []
             
-            if contexts:
-                reply, _ = generate_smart_response(q, contexts, question_class)
-                sample_responses[q] = reply
-        
-        return {
-            "interview_questions": interview_questions,
-            "sample_responses": sample_responses,
-            "note": "ใช้ /chat endpoint เพื่อทดสอบคำถามสัมภาษณ์"
-        }
-        
-    except Exception as e:
-        logger.error(f"Interview simulation failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.get("/capabilities")
-async def get_capabilities():
-    """Get chatbot capabilities and features"""
-    return {
-        "question_types": {
-            "factual": {
-                "description": "คำถามเกี่ยวกับข้อเท็จจริงในเรซูเม่",
-                "examples": ["ชื่ออะไร?", "อีเมลคืออะไร?", "เรียนจบจากไหน?"],
-                "response_style": "ตรงไปตรงมา อิงจากข้อมูลจริง"
-            },
-            "opinion": {
-                "description": "คำถามที่ต้องการการวิเคราะห์และความเห็น",
-                "examples": ["เหมาะกับตำแหน่ง Data Analyst ไหม?", "จุดแข็งคืออะไร?"],
-                "response_style": "แยกข้อเท็จจริงและความเห็นชัดเจน"
-            },
-            "capability": {
-                "description": "คำถามเกี่ยวกับทักษะและความสามารถ",
-                "examples": ["มีทักษะอะไรบ้าง?", "สามารถทำงานด้าน AI ได้ไหม?"],
-                "response_style": "อิงจากข้อมูลทักษะและประสบการณ์"
-            },
-            "interview": {
-                "description": "จำลองการสัมภาษณ์งาน",
-                "examples": ["ทำไมสนใจตำแหน่งนี้?", "เป้าหมายคืออะไร?"],
-                "response_style": "ตอบในฐานะผู้สมัครงาน"
-            }
-        },
-        "features": [
-            "อัตโนมัติจำแนกประเภทคำถาม",
-            "แยกข้อเท็จจริงและความเห็น",
-            "จำลองการสัมภาษณ์งาน",
-            "คำนวณค่าความเชื่อมั่นในคำตอบ",
-            "ค้นหาบริบทที่เกี่ยวข้องอัจฉริยะ"
-        ],
-        "transparency": {
-            "factual_responses": "อิงจากข้อมูลในเรซูเม่เท่านั้น",
-            "opinion_responses": "ระบุชัดเจนส่วนที่เป็นการวิเคราะห์",
-            "interview_simulation": "แจ้งเตือนว่าเป็นการจำลอง",
-            "confidence_scoring": "ให้คะแนนความเชื่อมั่นในคำตอบ"
-        }
-    }
-
-# ===================== Testing and Validation =====================
-@app.post("/test-intelligence")
-async def test_intelligence():
-    """Test the intelligent response system"""
-    try:
-        await ensure_data_loaded()
-        
-        test_cases = [
-            {
-                "question": "ชื่ออะไร?",
-                "expected_type": "factual",
-                "expected_confidence": "high"
-            },
-            {
-                "question": "เหมาะกับตำแหน่ง Data Scientist ไหม?",
-                "expected_type": "opinion",
-                "expected_confidence": "medium"
-            },
-            {
-                "question": "ทำไมถึงสนใจตำแหน่งนี้?",
-                "expected_type": "interview",
-                "expected_confidence": "low-medium"
-            },
-            {
-                "question": "มีทักษะด้าน Machine Learning ไหม?",
-                "expected_type": "capability",
-                "expected_confidence": "medium"
-            }
-        ]
-        
-        results = []
-        for test in test_cases:
-            question_class = QuestionClassifier.classify_question(test["question"])
-            hits = multi_query_retrieval(test["question"], question_class, k=3)
-            contexts = [hit[1] for hit in hits]
-            confidence = calculate_response_confidence(contexts, test["question"], question_class)
+            for chunk in self.chunks:
+                if (topic_lower in chunk.content.lower() or 
+                    any(topic_lower in keyword for keyword in chunk.keywords)):
+                    relevant_chunks.append({
+                        'section': chunk.section,
+                        'content': chunk.content,
+                        'relevance_score': self._calculate_relevance(chunk, topic_lower)
+                    })
             
-            if contexts:
-                reply, response_type = generate_smart_response(test["question"], contexts, question_class)
-            else:
-                reply, response_type = handle_no_context_response(test["question"], question_class)
-            
-            results.append({
-                "question": test["question"],
-                "expected_type": test["expected_type"],
-                "actual_type": question_class["type"],
-                "type_match": question_class["type"] == test["expected_type"],
-                "confidence": confidence,
-                "contexts_found": len(contexts),
-                "response_preview": reply[:100] + "..." if len(reply) > 100 else reply
-            })
+            context['topic_specific'] = sorted(relevant_chunks, 
+                                             key=lambda x: x['relevance_score'], 
+                                             reverse=True)[:3]
         
+        return context
+    
+    def _calculate_relevance(self, chunk: EnhancedResumeChunk, topic: str) -> float:
+        """Calculate relevance score for topic"""
+        content_lower = chunk.content.lower()
+        score = 0
+        
+        # Direct mention
+        if topic in content_lower:
+            score += 2
+        
+        # Keyword match
+        if any(topic in keyword for keyword in chunk.keywords):
+            score += 1.5
+        
+        # Section relevance
+        if chunk.section in ['experience', 'expertise'] and topic in content_lower:
+            score += 1
+        
+        # Timeline bonus (recent experience is more relevant)
+        if chunk.timeline and chunk.timeline.is_current:
+            score += 0.5
+        
+        return score
+    
+    def export_metadata(self) -> Dict[str, Any]:
+        """Export all metadata for debugging/analysis"""
         return {
-            "test_results": results,
-            "summary": {
-                "total_tests": len(test_cases),
-                "type_accuracy": sum(1 for r in results if r["type_match"]) / len(results),
-                "avg_confidence": sum(r["confidence"] for r in results) / len(results)
-            }
+            'profile': {
+                'basic_info': {
+                    'name': self.profile.name_en,
+                    'email': self.profile.email,
+                    'phone': self.profile.phone,
+                    'total_experience_years': self.profile.total_experience_years
+                },
+                'career_progression': self.profile.role_progression,
+                'industry_experience': self.profile.industry_experience,
+                'skills_by_category': {k: [s.name for s in v] for k, v in self.profile.skills.items()}
+            },
+            'chunks_metadata': [
+                {
+                    'section': chunk.section,
+                    'has_timeline': chunk.timeline is not None,
+                    'timeline_summary': {
+                        'duration_months': chunk.timeline.duration_months,
+                        'is_current': chunk.timeline.is_current
+                    } if chunk.timeline else None,
+                    'keywords': chunk.keywords,
+                    'achievements_count': len(chunk.achievements),
+                    'entities_count': len(chunk.entities)
+                }
+                for chunk in self.chunks
+            ],
+            'search_index': dict(self.metadata_index)
         }
-        
-    except Exception as e:
-        logger.error(f"Intelligence test failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+# Integration with existing code
+def integrate_enhanced_parser():
+    """Helper function showing how to integrate with existing chatbot"""
+    enhanced_manager = EnhancedResumeManager()
+    
+    # Replace the existing parse_structured_resume function
+    def enhanced_parse_structured_resume(text: str):
+        enhanced_manager.load_resume(text)
+        
+        # Convert to original format for compatibility
+        original_chunks = []
+        for enhanced_chunk in enhanced_manager.chunks:
+            # Create ResumeChunk with enhanced metadata
+            original_chunk = type('ResumeChunk', (), {
+                'content': enhanced_chunk.content,
+                'section': enhanced_chunk.section,
+                'metadata': {
+                    **enhanced_chunk.metadata,
+                    'timeline': enhanced_chunk.timeline,
+                    'keywords': enhanced_chunk.keywords,
+                    'achievements': enhanced_chunk.achievements,
+                    'entities': enhanced_chunk.entities
+                }
+            })()
+            original_chunks.append(original_chunk)
+        
+        # Create enhanced ProfileData
+        enhanced_profile = type('ProfileData', (), {
+            'name_en': enhanced_manager.profile.name_en,
+            'name_th': enhanced_manager.profile.name_th,
+            'email': enhanced_manager.profile.email,
+            'phone': enhanced_manager.profile.phone,
+            'location': enhanced_manager.profile.location,
+            'skills': [skill.name for skills in enhanced_manager.profile.skills.values() for skill in skills],
+            'total_experience_years': enhanced_manager.profile.total_experience_years,
+            'industry_experience': enhanced_manager.profile.industry_experience,
+            'enhanced_metadata': enhanced_manager.export_metadata()
+        })()
+        
+        return enhanced_profile, original_chunks
+    
+    return enhanced_parse_structured_resume, enhanced_manager
