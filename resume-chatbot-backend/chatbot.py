@@ -11,6 +11,7 @@ import google.generativeai as genai
 import fitz  # PyMuPDF
 import numpy as np
 import logging
+from scipy.sparse import hstack
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -267,6 +268,32 @@ def parse_structured_resume(text: str) -> Tuple[ProfileData, List[ResumeChunk]]:
         logger.error(f"Error parsing resume: {e}")
         return profile, chunks
 
+# ===== [เพิ่ม] enrich metadata =====
+for chunk in chunks:
+    # basic section name ให้ชัด
+    chunk.metadata.setdefault('section', chunk.section)
+
+    # เดา employer/role/dates ใน section=experience (pattern อาจปรับตามเรซูเม่จริง)
+    if chunk.section == 'experience':
+        m = re.search(r'(?P<company>[^\n]+?)\s+[-–]\s+(?P<role>[^\(]+?)\s*\((?P<dates>[^)]+)\)', chunk.content)
+        if m:
+            chunk.metadata.update({
+                'employer': m.group('company').strip(),
+                'role': m.group('role').strip(),
+                'dates': m.group('dates').strip()
+            })
+
+    # ดึง skills จาก bullets/รายการ
+    if chunk.section == 'skills':
+        skill_lines = re.findall(r'[•·\-]\s*([^\n]+)', chunk.content)
+        skills = []
+        for line in skill_lines:
+            skills.extend([s.strip() for s in re.split(r'[,/|]', line) if s.strip()])
+        if skills:
+            # เก็บแบบ unique
+            chunk.metadata['skills'] = sorted(list({s for s in skills}))
+
+
 # ===================== Enhanced Query Processing =====================
 def expand_query_for_context(query: str, question_class: Dict) -> List[str]:
     """Expand query based on question classification"""
@@ -326,7 +353,13 @@ def multi_query_retrieval(query: str, question_class: Dict, k: int = 5) -> List[
         
         for q in queries:
             # TF-IDF retrieval
-            qv = VECTORIZER.transform([q])
+            if isinstance(VECTORIZER, tuple):
+                vec_word, vec_char = VECTORIZER
+                q_word = vec_word.transform([q]) * 0.5
+                q_char = vec_char.transform([q]) * 0.5
+                qv = hstack([q_word, q_char])
+            else:
+                qv = VECTORIZER.transform([q])  # เผื่อกรณีเก่า
             tfidf_scores = cosine_similarity(qv, TFIDF_MATRIX).ravel()
             
             # Embedding retrieval
@@ -341,28 +374,39 @@ def multi_query_retrieval(query: str, question_class: Dict, k: int = 5) -> List[
             for i, (tfidf_score, emb_score) in enumerate(zip(tfidf_scores, emb_scores)):
                 hybrid_score = 0.4 * tfidf_score + 0.6 * emb_score
                 
-                section = RESUME_CHUNKS[i].section
+                sec = RESUME_CHUNKS[i].section
+                md = RESUME_CHUNKS[i].metadata or {}
                 
-                # Boost scores based on question type
-                if question_class["type"] == "factual":
-                    if section in ['basic_info', 'education', 'experience']:
-                        hybrid_score *= 1.5
-                elif question_class["type"] == "opinion":
-                    if section in ['achievements', 'experience', 'skills']:
-                        hybrid_score *= 1.3
-                elif question_class["type"] == "interview":
-                    if section in ['goals', 'strengths', 'summary']:
-                        hybrid_score *= 1.4
+                # บูสต์ตามประเภทคำถาม
+                if question_class["type"] == "factual" and sec in ['basic_info', 'education', 'experience']:
+                    hybrid_score *= 1.3
+                elif question_class["type"] in ["opinion", "capability"] and sec in ['achievements', 'experience', 'skills']:
+                    hybrid_score *= 1.2
+                elif question_class["type"] == "interview" and sec in ['goals', 'strengths', 'summary']:
+                    hybrid_score *= 1.2
+                
+                # บูสต์ตาม metadata keyword
+                ql = q.lower()
+                if "sap" in ql and any("sap" in s.lower() for s in md.get("skills", [])):
+                    hybrid_score *= 1.2
+                if ("ngg" in ql or "kubota" in ql) and md.get("employer", "").lower() in ql:
+                    hybrid_score *= 1.2
                 
                 all_results[i] = max(all_results.get(i, 0), hybrid_score)
         
         # Sort and return top k
         sorted_results = sorted(all_results.items(), key=lambda x: x[1], reverse=True)
         
+        # ตัดทิ้งตัวที่คะแนนต่ำกว่าค่ากลาง/ขั้นต่ำ 0.2
+        scores_arr = np.array([s for _, s in sorted_results]) if sorted_results else np.array([0.0])
+        cut = float(max(np.percentile(scores_arr, 50), 0.2))
+        
         results = []
-        for idx, score in sorted_results[:k]:
-            if score > question_class["confidence_threshold"] * 0.1:
-                results.append((idx, RESUME_CHUNKS[idx].content, score))
+        for idx, score in sorted_results[:k * 2]:
+            if score >= cut:
+                results.append((idx, RESUME_CHUNKS[idx].content, float(score)))
+            if len(results) >= k:
+                break
         
         logger.info(f"Retrieved {len(results)} relevant chunks for {question_class['type']} question")
         return results
@@ -544,28 +588,26 @@ def get_quick_answer(question: str) -> Optional[Tuple[str, str]]:
 
 # ===================== Utility Functions =====================
 def embed_texts(texts: List[str]) -> np.ndarray:
-    """Embed texts using Google AI with better error handling"""
+    """Embed ทีละข้อความ (loop) เพื่อหลีกเลี่ยงปัญหา batch schema ต่างเวอร์ชัน"""
     if not texts:
-        return np.zeros((0, 1))
-    
+        return np.zeros((0, 1), dtype="float32")
+    vecs = []
     try:
-        resp = genai.embed_content(
-            model="text-embedding-004",
-            content=texts,
-            task_type="retrieval_document"
-        )
-        
-        embs = resp.get("embeddings") or resp.get("embedding")
-        if isinstance(embs, list) and isinstance(embs[0], dict) and "values" in embs[0]:
-            vecs = np.array([e["values"] for e in embs], dtype="float32")
-        elif isinstance(embs, dict) and "values" in embs:
-            vecs = np.array([embs["values"]], dtype="float32")
-        else:
-            vecs = np.array(embs, dtype="float32")
-        
-        logger.info(f"Successfully embedded {len(texts)} texts")
-        return vecs
-        
+        for t in texts:
+            resp = genai.embed_content(
+                model="text-embedding-004",
+                content=t,
+                task_type="retrieval_document"
+            )
+            emb = resp.get("embedding") or resp.get("embeddings")
+            if isinstance(emb, dict) and "values" in emb:
+                vecs.append(np.array(emb["values"], dtype="float32"))
+            elif isinstance(emb, list) and len(emb) > 0 and isinstance(emb[0], dict) and "values" in emb[0]:
+                vecs.append(np.array(emb[0]["values"], dtype="float32"))
+            else:
+                # fallback ป้องกันหลุด schema
+                vecs.append(np.zeros((1024,), dtype="float32"))
+        return np.vstack(vecs)
     except Exception as e:
         logger.error(f"Error in embed_texts: {e}")
         return np.zeros((len(texts), 1), dtype="float32")
@@ -629,30 +671,39 @@ async def fetch_resume_text() -> str:
         return ""
 
 def build_search_index():
-    """Build TF-IDF and embedding indices with error handling"""
+    """Build TF-IDF (word + char) และ embeddings พร้อม normalization"""
     global VECTORIZER, TFIDF_MATRIX, EMB_MATRIX
-    
+
     if not RESUME_CHUNKS:
         logger.warning("No resume chunks to index")
         return
-    
+
     try:
         contents = [chunk.content for chunk in RESUME_CHUNKS]
-        
-        # TF-IDF
-        VECTORIZER = TfidfVectorizer(min_df=1, ngram_range=(1,2), max_features=1000)
-        TFIDF_MATRIX = VECTORIZER.fit_transform(contents)
-        
-        # Embeddings
+
+        # 1) Word n-gram (เหมาะอังกฤษ/ทับศัพท์)
+        vec_word = TfidfVectorizer(min_df=1, ngram_range=(1, 2), max_features=20000)
+        X_word = vec_word.fit_transform(contents)
+
+        # 2) Char n-gram (เหมาะภาษาไทย/ติดคำ)
+        vec_char = TfidfVectorizer(analyzer="char_wb", ngram_range=(3, 6), min_df=1, max_features=30000)
+        X_char = vec_char.fit_transform(contents)
+
+        # รวมสองมุมมอง (ถ่วงเท่า ๆ กันก่อน)
+        VECTORIZER = (vec_word, vec_char)
+        TFIDF_MATRIX = hstack([X_word * 0.5, X_char * 0.5])
+
+        # 3) Embeddings + L2 normalize
         EMB_MATRIX = embed_texts(contents)
         if EMB_MATRIX is not None and EMB_MATRIX.size > 0:
             norms = np.linalg.norm(EMB_MATRIX, axis=1, keepdims=True) + 1e-12
             EMB_MATRIX = EMB_MATRIX / norms
-        
-        logger.info(f"Built search index with {len(contents)} chunks")
-        
+
+        logger.info(f"Built search index with {len(contents)} chunks (word+char TFIDF, embeddings)")
+
     except Exception as e:
         logger.error(f"Error building search index: {e}")
+
 
 async def ensure_data_loaded(force: bool = False):
     """Ensure resume data is loaded and indexed with better error handling"""
@@ -687,12 +738,14 @@ def home():
 async def health():
     try:
         await ensure_data_loaded()
+        emb_ready = EMB_MATRIX is not None and hasattr(EMB_MATRIX, "size") and EMB_MATRIX.size > 10
+        tfidf_ready = TFIDF_MATRIX is not None and getattr(TFIDF_MATRIX, "shape", [0])[0] > 0
         return {
-            "ok": True, 
+            "ok": True,
             "chunks": len(RESUME_CHUNKS),
             "profile_loaded": bool(PROFILE.name_en or PROFILE.name_th),
-            "vectorizer_ready": VECTORIZER is not None,
-            "embeddings_ready": EMB_MATRIX is not None,
+            "vectorizer_ready": tfidf_ready,
+            "embeddings_ready": emb_ready,
             "ai_ready": bool(GOOGLE_API_KEY)
         }
     except Exception as e:
@@ -719,6 +772,24 @@ async def debug():
         logger.error(f"Debug endpoint failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.get("/debug-metadata")
+async def debug_metadata(sample: int = 5):
+    """ดู metadata ของชังก์ตัวอย่าง เพื่อยืนยันว่ามี employer/role/dates/skills ไหลเข้า index จริง"""
+    try:
+        await ensure_data_loaded()
+        data = []
+        for i, c in enumerate(RESUME_CHUNKS[:sample]):
+            data.append({
+                "idx": i,
+                "section": c.section,
+                "metadata": c.metadata,
+                "preview": c.content[:120] + ("..." if len(c.content) > 120 else "")
+            })
+        return {"count": len(RESUME_CHUNKS), "samples": data}
+    except Exception as e:
+        logger.error(f"debug_metadata failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+        
 @app.post("/refresh")
 async def refresh():
     try:
